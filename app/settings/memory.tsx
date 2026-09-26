@@ -72,7 +72,7 @@ export default function MemoryScreen() {
         </ThemedText>
 
         <View style={[styles.card, { backgroundColor: theme.surface }]}> 
-          <ThemedText type="defaultSemiBold">I say</ThemedText>
+          <ThemedText type="defaultSemiBold">When I say...</ThemedText>
           <TextInput
             value={trigger}
             onChangeText={setTrigger}
@@ -81,11 +81,11 @@ export default function MemoryScreen() {
             style={[styles.input, { color: theme.text, borderColor: theme.border }]}
             accessibilityLabel="Replacement phrase"
           />
-          <ThemedText type="defaultSemiBold">It means</ThemedText>
+          <ThemedText type="defaultSemiBold">I mean...</ThemedText>
           <TextInput
             value={replacement}
             onChangeText={setReplacement}
-            placeholder="two shots of espresso + 8 oz Lactaid 2% milk"
+            placeholder="two shots of espresso + 8 oz 2% milk + a packet of sugar"
             placeholderTextColor={theme.textSubtle}
             style={[styles.input, styles.multiline, { color: theme.text, borderColor: theme.border }]}
             multiline
