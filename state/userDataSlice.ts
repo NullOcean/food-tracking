@@ -8,6 +8,13 @@ export interface userDataState {
   goalCalculationInputs: GoalCalculationInputs;
   focusedMetrics: DisplayedMacroTypes[];
   dailySummary: DailySummary | null;
+  replacements: FoodReplacement[];
+}
+
+export interface FoodReplacement {
+  id: string;
+  trigger: string;
+  replacement: string;
 }
 
 // These inputs are intentionally separate from the manually editable goals.
@@ -48,6 +55,7 @@ const initialState: userDataState = {
   goalCalculationInputs: defaultGoalCalculationInputs,
   focusedMetrics: defaultFocusedMetrics,
   dailySummary: null,
+  replacements: [],
 };
 
 export const resetDefaultUserGoals = (state?: Partial<userDataState>) => ({
@@ -75,11 +83,34 @@ export const userDataSlice = createSlice({
     setDailySummary: (state, action: PayloadAction<DailySummary>) => {
       state.dailySummary = action.payload;
     },
+    addReplacement: (state, action: PayloadAction<FoodReplacement>) => {
+      state.replacements.push(action.payload);
+    },
+    updateReplacement: (state, action: PayloadAction<FoodReplacement>) => {
+      const index = state.replacements.findIndex(
+        (replacement) => replacement.id === action.payload.id
+      );
+      if (index !== -1) {
+        state.replacements[index] = action.payload;
+      }
+    },
+    removeReplacement: (state, action: PayloadAction<string>) => {
+      state.replacements = state.replacements.filter(
+        (replacement) => replacement.id !== action.payload
+      );
+    },
   },
 });
 
 // Action creators are generated for each case reducer function
-export const { setGoals, setFocusedMetrics, setDailySummary } =
+export const {
+  setGoals,
+  setFocusedMetrics,
+  setDailySummary,
+  addReplacement,
+  updateReplacement,
+  removeReplacement,
+} =
   userDataSlice.actions;
 
 export default userDataSlice.reducer;

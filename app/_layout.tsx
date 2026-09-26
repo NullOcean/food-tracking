@@ -67,6 +67,10 @@ export default function RootLayout() {
               name="settings/focus"
               options={{ headerShown: true, title: "Focus", ...headerStyle }}
             />
+            <Stack.Screen
+              name="settings/memory"
+              options={{ headerShown: true, title: "Memory", ...headerStyle }}
+            />
           </Stack>
         </PersistGate>
       </Provider>

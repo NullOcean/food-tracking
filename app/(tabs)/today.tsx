@@ -65,6 +65,9 @@ export default function TodayScreen() {
   );
   const todayMacros = React.useMemo(() => getSummedMacros(meals), [meals]);
   const goals = useSelector((state: RootState) => state.userData.goals);
+  const replacements = useSelector(
+    (state: RootState) => state.userData.replacements ?? []
+  );
   const focusedMetrics = useSelector(
     (state: RootState) => state.userData.focusedMetrics ?? defaultFocusedMetrics
   );
@@ -206,7 +209,7 @@ export default function TodayScreen() {
       }
 
       const recipes = allMeals.filter((meal) => meal.isAdded && meal.recipe);
-      const response = await parseMeal(transcript, [], recipes);
+      const response = await parseMeal(transcript, [], recipes, replacements);
       if ("error" in response) {
         Alert.alert("Couldn't understand that meal", response.error);
         return;

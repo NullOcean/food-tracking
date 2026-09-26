@@ -56,6 +56,9 @@ export default function PlanScreen() {
       state.userData.goalCalculationInputs?.overallGoal ?? "weight_loss"
   );
   const meals = useSelector((state: RootState) => state.food.meals);
+  const replacements = useSelector(
+    (state: RootState) => state.userData.replacements ?? []
+  );
   const [messages, setMessages] = React.useState<Message[]>(initialMessages);
   const [stage, setStage] = React.useState<PlannerStage>("entry");
   const [mode, setMode] = React.useState<PlanningMode>();
@@ -239,7 +242,8 @@ export default function PlanScreen() {
       const response = await parseMeal(
         `${activePlanContext}This is a food-planning request. Estimate the exact food and quantities described; do not normalize, omit, or invent quantities. Food request: ${trimmedInput}`,
         [],
-        meals.filter((meal) => meal.isAdded && meal.recipe)
+        meals.filter((meal) => meal.isAdded && meal.recipe),
+        replacements
       );
       if (requestSessionId !== plannerSessionId.current) return;
       if ("error" in response) {

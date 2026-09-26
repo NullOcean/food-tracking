@@ -64,6 +64,9 @@ export const Chat = ({
   let recipes = useSelector((state: RootState) => state.food.meals).filter(
     (meal: Meal) => meal?.isAdded && meal?.recipe
   );
+  const replacements = useSelector(
+    (state: RootState) => state.userData.replacements ?? []
+  );
   const [messages, setMessages] = React.useState<Message[]>([]);
   const messagesRef = React.useRef<Message[]>([]);
   const {
@@ -194,7 +197,8 @@ export const Chat = ({
           ? await utilizeRecipes(
               transcription,
               messagesRef.current ?? [],
-              recipes
+              recipes,
+              replacements
             )
           : { transformedInput: transcription };
 
@@ -226,7 +230,8 @@ export const Chat = ({
             : await parseMeal(
                 attemptUseRecipe.transformedInput,
                 messagesRef.current ?? [],
-                recipes
+                recipes,
+                replacements
               );
 
         if (!("error" in response)) {

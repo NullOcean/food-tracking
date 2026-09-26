@@ -27,6 +27,20 @@ export default function SettingsScreen() {
       </TouchableOpacity>
       <TouchableOpacity
         style={[styles.menuItem, styles.menuItemSpaced, { backgroundColor: theme.surface }]}
+        onPress={() => router.push("/settings/memory")}
+        accessibilityRole="button"
+        accessibilityLabel="Memory"
+      >
+        <View>
+          <ThemedText type="defaultSemiBold">Memory</ThemedText>
+          <ThemedText style={[styles.description, { color: theme.textSubtle }]}>
+            Teach the app your usual foods and phrases
+          </ThemedText>
+        </View>
+        <ThemedText style={[styles.chevron, { color: theme.textSubtle }]}>›</ThemedText>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.menuItem, styles.menuItemSpaced, { backgroundColor: theme.surface }]}
         onPress={() => router.push("/settings/focus")}
         accessibilityRole="button"
         accessibilityLabel="Focus"

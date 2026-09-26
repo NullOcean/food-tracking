@@ -16,6 +16,7 @@ import {
   WizardResponse,
 } from "@/config/planning-wizard";
 import { PLANNING_WIZARD_PROMPT } from "@/gpt-prompts/planning-wizard";
+import { FoodReplacement } from "@/state/userDataSlice";
 
 const CHAT_MODEL = "gpt-4.1-mini";
 
@@ -314,15 +315,21 @@ export type UtilizeRecipeResponse = Promise<{
   error?: string;
 }>;
 
+const replacementInstructions = (replacements: FoodReplacement[]) =>
+  replacements.length
+    ? `\n\nThe user has saved these personal food replacements. Check them before interpreting the user's words. When the input uses a trigger phrase, treat it as the corresponding food description and preserve any extra quantities or context from the input. Do not use a replacement unless the trigger phrase is actually present.\n${JSON.stringify(replacements)}`
+    : "";
+
 export const utilizeRecipes = async (
   input: string,
   pastMessages: Message[],
-  recipes: Meal[]
+  recipes: Meal[],
+  replacements: FoodReplacement[] = []
 ): UtilizeRecipeResponse => {
   const messages = [
     {
       role: "system",
-      content: RECIPE_UTILIZATION_PROMPT,
+      content: RECIPE_UTILIZATION_PROMPT + replacementInstructions(replacements),
     },
     ...pastMessages.map((message) => {
       return {
@@ -381,12 +388,13 @@ export const utilizeRecipes = async (
 export const parseMeal = async (
   input: string,
   pastMessages: Message[],
-  recipes: Meal[]
+  recipes: Meal[],
+  replacements: FoodReplacement[] = []
 ): ParseMealResponse => {
   const messages = [
     {
       role: "system",
-      content: MEAL_PARSING_PROMPT,
+      content: MEAL_PARSING_PROMPT + replacementInstructions(replacements),
     },
     ...pastMessages.map((message) => {
       return {
