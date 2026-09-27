@@ -19,7 +19,7 @@ import {
   transcribeAudio,
   utilizeRecipes,
 } from "@/services/open-ai";
-import { recordMeal } from "@/state/foodSlice";
+import { logMeal, recordMeal } from "@/state/foodSlice";
 import { addPreferences } from "@/state/userDataSlice";
 import type { UserMemory } from "@/state/userDataSlice";
 import { useSelector, useDispatch } from "react-redux";
@@ -29,6 +29,7 @@ import { ButtonStyle, ThemedButton } from "../ThemedButton";
 import SpeakSVG from "../../svg/speak.svg";
 import { useAppTheme } from "@/hooks/useAppTheme";
 import { useLocalSearchParams } from "expo-router";
+import { router } from "expo-router";
 import { RootState } from "@/state/store";
 
 export type ChatProps = {
@@ -251,6 +252,12 @@ export const Chat = ({
               dispatch(addPreferences(learnedPreferences));
             }
             dispatch(recordMeal(recordableMeal));
+
+            if (voiceOrigin && logMode !== "recipe") {
+              dispatch(logMeal(recordableMeal.mealId));
+              router.back();
+              return;
+            }
 
             setMeal(recordableMeal);
             onMealRetrieval?.(recordableMeal.mealId);

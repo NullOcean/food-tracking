@@ -65,23 +65,15 @@ export const getRecipeSummedMacros = (meal: Meal) => {
   return totals;
 };
 
-export const sortMealsByCategory = (meals: Meal[]) => {
-  const mealRanking: string[] = [
-    "uncategorized",
-    "early morning snack",
-    "breakfast",
-    "snack before lunch",
-    "lunch",
-    "snack before dinner",
-    "dinner",
-    "midnight snack",
-  ];
-  return meals.sort((meal1, meal2) => {
-    return (
-      mealRanking.findIndex((str) => str === meal1.meal.toLowerCase()) -
-      mealRanking.findIndex((str) => str === meal2.meal.toLowerCase())
-    );
-  });
+export const sortMealsByLoggedAt = (meals: Meal[]) => {
+  return meals
+    .map((meal, index) => ({ meal, index }))
+    .sort((first, second) => {
+      const loggedAtDifference =
+        (second.meal.loggedAt ?? 0) - (first.meal.loggedAt ?? 0);
+      return loggedAtDifference || second.index - first.index;
+    })
+    .map(({ meal }) => meal);
 };
 
 export const convertFatSecretFood = (

@@ -25,6 +25,7 @@ export const foodSlice = createSlice({
       );
       if (mealIndex >= 0) {
         state.meals[mealIndex].isAdded = true;
+        state.meals[mealIndex].loggedAt = Date.now();
         state.meals = state.meals.filter((meal) => meal.isAdded);
       } else {
         console.error(

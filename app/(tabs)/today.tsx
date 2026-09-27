@@ -12,7 +12,7 @@ import {
 import { router } from "expo-router";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/state/store";
-import { getSummedMacros, sortMealsByCategory } from "@/helpers/food-utils";
+import { getSummedMacros, sortMealsByLoggedAt } from "@/helpers/food-utils";
 import {
   DAY_SUMMARY_MAX_AGE_MS,
   createDaySummarySignature,
@@ -49,7 +49,6 @@ export default function TodayScreen() {
     discardRecording,
   } = useVoiceRecorder();
   const [isQuickTranscribing, setIsQuickTranscribing] = React.useState(false);
-  const [quickPreviewMealId, setQuickPreviewMealId] = React.useState<string>();
   const keyboardBounce = React.useRef(new Animated.Value(0)).current;
   const date = new Date();
   const todayDate = `${date.getFullYear()}${
@@ -58,7 +57,7 @@ export default function TodayScreen() {
   const allMeals = useSelector((state: RootState) => state.food.meals);
   const meals = React.useMemo(
     () =>
-      sortMealsByCategory(
+      sortMealsByLoggedAt(
         allMeals.filter(
           (meal) => meal?.isAdded && meal?.date === todayDate && !meal?.recipe
         )
@@ -229,10 +228,10 @@ export default function TodayScreen() {
         return;
       }
       if (!response.meal) {
-        Alert.alert(
-          "Need a little more detail",
-          response.followUpQuestion ?? "Try describing the meal in a little more detail."
-        );
+        router.push({
+          pathname: "/(log)/log",
+          params: { logMode: "meal", initialTranscript: transcript },
+        });
         return;
       }
 
@@ -241,7 +240,7 @@ export default function TodayScreen() {
         dispatch(addPreferences(learnedPreferences));
       }
       dispatch(recordMeal(recordableMeal));
-      setQuickPreviewMealId(recordableMeal.mealId);
+      dispatch(logMeal(recordableMeal.mealId));
     } finally {
       setIsQuickTranscribing(false);
     }
@@ -298,20 +297,9 @@ export default function TodayScreen() {
       </View>
       <ScrollView>
         <View style={{ ...styles.mealsListContainer }}>
-          {quickPreviewMealId ? (
-            <MealSummary
-              mealId={quickPreviewMealId}
-              preview
-              onComplete={() => {
-                dispatch(logMeal(quickPreviewMealId));
-                setQuickPreviewMealId(undefined);
-              }}
-            />
-          ) : (
-            meals.map((meal: Meal) => (
-              <MealSummary mealId={meal.mealId} key={meal.mealId} />
-            ))
-          )}
+          {meals.map((meal: Meal) => (
+            <MealSummary mealId={meal.mealId} key={meal.mealId} />
+          ))}
         </View>
       </ScrollView>
       <View style={styles.logButton}>

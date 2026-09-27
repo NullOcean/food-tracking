@@ -1,6 +1,7 @@
 export type Meal = {
   mealId: string; //uuid
   isAdded?: boolean;
+  loggedAt?: number;
   followUpQuestion?: string;
   date: string;
   meal: MealCategories;
