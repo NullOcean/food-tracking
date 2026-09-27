@@ -78,7 +78,7 @@ export const FoodSearchResults = ({
       {searchResults?.foods?.food?.map((food, index) => (
         <View key={index} style={[styles.resultContainer, { backgroundColor: theme.surface }]}>
           <TouchableOpacity onPress={() => expandIndex(index)}>
-            <ThemedText type="subtitle">{food.food_name}</ThemedText>
+            <ThemedText type="subtitle">{food.brand_name ? `${food.brand_name} - ` : ''}{food.food_name}</ThemedText>
             {index !== expandedIndex && (
               <ThemedText type="default">{food.food_description}</ThemedText>
             )}
@@ -102,7 +102,7 @@ export const FoodSearchResults = ({
                     />
                   ))}
               </View>
-              <ThemedButton onPress={() => chooseFood()} title="Add" />
+              <ThemedButton onPress={() => chooseFood()} title="Swap" />
             </View>
           )}
         </View>
