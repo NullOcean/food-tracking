@@ -15,6 +15,8 @@ import { getSummedMacros } from "@/helpers/food-utils";
 import { getRemainingMacros } from "@/helpers/planning-utils";
 import { advancePlanningWizard, parseMeal } from "@/services/open-ai";
 import { logMeal, recordMeal } from "@/state/foodSlice";
+import { addDislike, addLike } from "@/state/userDataSlice";
+import type { UserMemory } from "@/state/userDataSlice";
 import { RootState } from "@/state/store";
 import { DisplayedMacros, Meal } from "@/types/openAi.types";
 import * as Crypto from "expo-crypto";
@@ -59,6 +61,11 @@ export default function PlanScreen() {
   const replacements = useSelector(
     (state: RootState) => state.userData.replacements ?? []
   );
+  const memory: UserMemory = useSelector((state: RootState) => ({
+    likes: state.userData.likes ?? [],
+    dislikes: state.userData.dislikes ?? [],
+    preferences: state.userData.preferences ?? [],
+  }));
   const [messages, setMessages] = React.useState<Message[]>(initialMessages);
   const [stage, setStage] = React.useState<PlannerStage>("entry");
   const [mode, setMode] = React.useState<PlanningMode>();
@@ -75,6 +82,9 @@ export default function PlanScreen() {
   }>();
   const [recordingRequestId, setRecordingRequestId] = React.useState(0);
   const [plannedMeal, setPlannedMeal] = React.useState<Meal>();
+  const [recommendationFeedback, setRecommendationFeedback] = React.useState<
+    Record<string, "like" | "dislike">
+  >({});
   const plannerRequestInFlight = React.useRef(false);
   const plannerSessionId = React.useRef(0);
 
@@ -146,6 +156,7 @@ export default function PlanScreen() {
         recommendationLevel,
         selectedFormat,
         previousRecommendations,
+        memory,
         guardrails: {
           questionBudget: PLANNING_WIZARD_CONFIG.modes[selectedMode].questionBudget,
           questionCount: nextAnswers.length,
@@ -243,18 +254,21 @@ export default function PlanScreen() {
         `${activePlanContext}This is a food-planning request. Estimate the exact food and quantities described; do not normalize, omit, or invent quantities. Food request: ${trimmedInput}`,
         [],
         meals.filter((meal) => meal.isAdded && meal.recipe),
-        replacements
+        replacements,
+        memory,
+        { allowLearnedPreferences: false }
       );
       if (requestSessionId !== plannerSessionId.current) return;
       if ("error" in response) {
         replaceLoadingWith({ from: MessageFrom.GPT, contents: `I couldn't estimate that: ${response.error}` });
         return;
       }
-      if (!response.ingredients.length) {
+      const { learnedPreferences: _learnedPreferences, ...plannedMealResponse } = response;
+      if (!plannedMealResponse.ingredients.length) {
         replaceLoadingWith({ from: MessageFrom.GPT, contents: "I need a little more detail—try the food or restaurant item." });
         return;
       }
-      setPlannedMeal(response);
+      setPlannedMeal(plannedMealResponse);
       replaceLoadingWith({ from: MessageFrom.GPT, contents: "Cool—here's how that fits today." });
     } finally {
       if (requestSessionId === plannerSessionId.current) {
@@ -279,6 +293,21 @@ export default function PlanScreen() {
       "option",
       selectedSuggestion
     );
+  };
+
+  const rateRecommendation = (
+    recommendation: SuggestedMeal,
+    rating: "like" | "dislike"
+  ) => {
+    dispatch(
+      rating === "like"
+        ? addLike(recommendation.title)
+        : addDislike(recommendation.title)
+    );
+    setRecommendationFeedback((current) => ({
+      ...current,
+      [recommendation.id]: rating,
+    }));
   };
 
 
@@ -353,6 +382,7 @@ export default function PlanScreen() {
     setSelectedFormat(undefined);
     setCommentaryChoice(undefined);
     setPlannedMeal(undefined);
+    setRecommendationFeedback({});
   };
 
   return (
@@ -389,6 +419,8 @@ export default function PlanScreen() {
               onChooseMode={chooseMode}
               onChooseQuestion={chooseWizardOption}
               onChooseFormatRecommendation={chooseFormatRecommendation}
+              recommendationFeedback={recommendationFeedback}
+              onRateRecommendation={rateRecommendation}
               onForceSuggestions={forceSuggestions}
               onRequestCommentary={(question, option) => {
                 setCommentaryChoice({ category: question.category, option });
@@ -405,13 +437,15 @@ export default function PlanScreen() {
   );
 }
 
-function WizardOptions({ content, remaining, onChooseEntry, onChooseMode, onChooseQuestion, onChooseFormatRecommendation, onForceSuggestions, onRequestCommentary }: {
+function WizardOptions({ content, remaining, onChooseEntry, onChooseMode, onChooseQuestion, onChooseFormatRecommendation, recommendationFeedback, onRateRecommendation, onForceSuggestions, onRequestCommentary }: {
   content: ActiveWizardContent;
   remaining: DisplayedMacros;
   onChooseEntry: (value: boolean) => void;
   onChooseMode: (mode: PlanningMode) => void;
   onChooseQuestion: (question: WizardQuestion, option: string) => void;
   onChooseFormatRecommendation: (recommendation: SuggestedMeal) => void;
+  recommendationFeedback: Record<string, "like" | "dislike">;
+  onRateRecommendation: (recommendation: SuggestedMeal, rating: "like" | "dislike") => void;
   onForceSuggestions: () => void;
   onRequestCommentary: (question: WizardQuestion, option: string) => void;
 }) {
@@ -428,7 +462,7 @@ function WizardOptions({ content, remaining, onChooseEntry, onChooseMode, onChoo
   if (content.kind === "question") {
     return <View><WizardQuestionOptions options={content.question.options} onChoose={(option) => onChooseQuestion(content.question, option)} onRequestCommentary={(option) => onRequestCommentary(content.question, option)} /><Pressable style={styles.suggestNow} onPress={onForceSuggestions}><ThemedText colorOverride={theme.textMuted}>Just give me suggestions</ThemedText></Pressable></View>;
   }
-  return <View style={styles.recommendations}><ThemedText style={styles.recommendationHint}>{content.level === "format" ? "Pick a direction that sounds good." : "A few ways that format could fit today. When you choose a restaurant, log the exact order from Today."}</ThemedText>{content.recommendations.map((recommendation) => <RecommendationCard key={recommendation.id} recommendation={recommendation} remaining={remaining} level={content.level} onPress={content.level === "format" ? () => onChooseFormatRecommendation(recommendation) : undefined} />)}<Pressable style={styles.suggestNow} onPress={onForceSuggestions}><ThemedText colorOverride={theme.textMuted}>Keep suggesting</ThemedText></Pressable></View>;
+  return <View style={styles.recommendations}><ThemedText style={styles.recommendationHint}>{content.level === "format" ? "Pick a direction that sounds good." : "A few ways that format could fit today. When you choose a restaurant, log the exact order from Today."}</ThemedText>{content.recommendations.map((recommendation) => <RecommendationCard key={recommendation.id} recommendation={recommendation} remaining={remaining} level={content.level} onPress={content.level === "format" ? () => onChooseFormatRecommendation(recommendation) : undefined} feedback={recommendationFeedback[recommendation.id]} onRate={(rating) => onRateRecommendation(recommendation, rating)} />)}<Pressable style={styles.suggestNow} onPress={onForceSuggestions}><ThemedText colorOverride={theme.textMuted}>Keep suggesting</ThemedText></Pressable></View>;
 }
 
 function OptionGroup({ options, onChoose }: { options: string[]; onChoose: (option: string) => void }) {
@@ -443,10 +477,11 @@ function WizardQuestionOptions({ options, onChoose, onRequestCommentary }: { opt
   return <View style={styles.options}>{options.map((option) => <View key={option.id} style={styles.option}><Pressable style={styles.optionMain} onPress={() => onChoose(option.label)}><ThemedText colorOverride={theme.text}>{option.label}</ThemedText></Pressable>{option.requiresCommentary && <Pressable style={styles.optionMic} onPress={() => onRequestCommentary(option.label)} accessibilityLabel={`Add commentary for ${option.label}`}><Ionicons name="mic-outline" size={21} color={theme.accent} /></Pressable>}</View>)}</View>;
 }
 
-function RecommendationCard({ recommendation, remaining, level, onPress }: { recommendation: SuggestedMeal; remaining: DisplayedMacros; level: RecommendationLevel; onPress?: () => void }) {
-  const styles = createStyles(useAppTheme());
+function RecommendationCard({ recommendation, remaining, level, onPress, feedback, onRate }: { recommendation: SuggestedMeal; remaining: DisplayedMacros; level: RecommendationLevel; onPress?: () => void; feedback?: "like" | "dislike"; onRate: (rating: "like" | "dislike") => void }) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const after = getRemainingMacros(remaining, recommendation.estimatedMacros);
-  return <Pressable style={styles.recommendation} onPress={onPress} disabled={!onPress}><ThemedText type="defaultSemiBold">{recommendation.title}</ThemedText>{level === "option" && <><ThemedText style={styles.recommendationDescription}>{recommendation.description}</ThemedText><ThemedText style={styles.rationale}>{recommendation.rationale}</ThemedText></>}<ThemedText style={styles.impact}>~{recommendation.estimatedMacros.calories} kcal · {recommendation.estimatedMacros.protein}g protein · {recommendation.estimatedMacros.net_carbohydrates}g net carbs</ThemedText><ThemedText style={styles.afterImpact}>{formatRemaining(after)}</ThemedText></Pressable>;
+  return <View style={styles.recommendation}><Pressable onPress={onPress} disabled={!onPress}><ThemedText type="defaultSemiBold">{recommendation.title}</ThemedText>{level === "option" && <><ThemedText style={styles.recommendationDescription}>{recommendation.description}</ThemedText><ThemedText style={styles.rationale}>{recommendation.rationale}</ThemedText></>}<ThemedText style={styles.impact}>~{recommendation.estimatedMacros.calories} kcal · {recommendation.estimatedMacros.protein}g protein · {recommendation.estimatedMacros.net_carbohydrates}g net carbs</ThemedText><ThemedText style={styles.afterImpact}>{formatRemaining(after)}</ThemedText></Pressable><View style={styles.feedbackRow}><ThemedText style={styles.feedbackLabel}>Helpful?</ThemedText><Pressable accessibilityLabel={`Like ${recommendation.title}`} onPress={() => onRate("like")} style={styles.feedbackButton}><Ionicons name={feedback === "like" ? "thumbs-up" : "thumbs-up-outline"} size={20} color={feedback === "like" ? theme.accent : theme.textMuted} /></Pressable><Pressable accessibilityLabel={`Dislike ${recommendation.title}`} onPress={() => onRate("dislike")} style={styles.feedbackButton}><Ionicons name={feedback === "dislike" ? "thumbs-down" : "thumbs-down-outline"} size={20} color={feedback === "dislike" ? theme.danger : theme.textMuted} /></Pressable></View></View>;
 }
 
 function PlanImpactCard({ meal, macros, remaining, remainingAfter, onLog }: { meal: Meal; macros: DisplayedMacros; remaining: DisplayedMacros; remainingAfter: DisplayedMacros; onLog: () => void }) {
@@ -462,5 +497,5 @@ function getFitMessage(remainingCalories: number, plannedCalories: number) { if 
 function formatRemaining(remaining: DisplayedMacros) { return `${Math.round(remaining.calories)} kcal left · ${Math.round(remaining.protein)}g protein left · ${Math.round(remaining.net_carbohydrates)}g net carbs left`; }
 
 const createStyles = (theme: AppTheme) => StyleSheet.create({
-  screen: { flex: 1, backgroundColor: theme.background }, header: { paddingHorizontal: 16, paddingTop: 12 }, budgetCard: { flexDirection: "row", justifyContent: "space-between", backgroundColor: theme.surface, borderRadius: 10, padding: 14 }, budgetValue: { fontSize: 20, fontWeight: "700" }, budgetLabel: { color: theme.textSubtle, fontSize: 12, marginTop: 2 }, startOver: { alignSelf: "flex-end", paddingVertical: 10, paddingHorizontal: 4 }, options: { margin: 12, gap: 8 }, option: { backgroundColor: theme.surfaceRaised, borderRadius: 10, flexDirection: "row", alignItems: "center", padding: 8 }, optionMain: { flex: 1, paddingHorizontal: 14, paddingVertical: 12 }, optionMic: { padding: 12 }, suggestNow: { alignItems: "center", paddingVertical: 8 }, recommendations: { margin: 12, gap: 10 }, recommendationHint: { color: theme.textMuted, fontSize: 13 }, recommendation: { backgroundColor: theme.surface, borderRadius: 10, padding: 14 }, recommendationDescription: { color: theme.text, marginTop: 3 }, rationale: { color: theme.textMuted, fontSize: 13, marginTop: 8 }, impact: { color: theme.accent, marginTop: 10 }, afterImpact: { color: theme.textSubtle, fontSize: 13, marginTop: 3 }, resultCard: { margin: 12, backgroundColor: theme.surface, borderRadius: 10, padding: 16 }, assumption: { color: theme.textSubtle, fontSize: 13, marginTop: 5 }, fitMessage: { color: theme.accent, marginTop: 16, lineHeight: 20 }, macroGrid: { flexDirection: "row", flexWrap: "wrap", marginTop: 16, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.divider, paddingTop: 12 }, macroValue: { width: "50%", marginBottom: 10 }, macroLabel: { color: theme.textSubtle, fontSize: 13 }, afterTitle: { marginTop: 4 }, afterText: { color: theme.textMuted, marginTop: 4 }, logButton: { backgroundColor: theme.accent, borderRadius: 8, alignItems: "center", marginTop: 20, paddingVertical: 13 },
+  screen: { flex: 1, backgroundColor: theme.background }, header: { paddingHorizontal: 16, paddingTop: 12 }, budgetCard: { flexDirection: "row", justifyContent: "space-between", backgroundColor: theme.surface, borderRadius: 10, padding: 14 }, budgetValue: { fontSize: 20, fontWeight: "700" }, budgetLabel: { color: theme.textSubtle, fontSize: 12, marginTop: 2 }, startOver: { alignSelf: "flex-end", paddingVertical: 10, paddingHorizontal: 4 }, options: { margin: 12, gap: 8 }, option: { backgroundColor: theme.surfaceRaised, borderRadius: 10, flexDirection: "row", alignItems: "center", padding: 8 }, optionMain: { flex: 1, paddingHorizontal: 14, paddingVertical: 12 }, optionMic: { padding: 12 }, suggestNow: { alignItems: "center", paddingVertical: 8 }, recommendations: { margin: 12, gap: 10 }, recommendationHint: { color: theme.textMuted, fontSize: 13 }, recommendation: { backgroundColor: theme.surface, borderRadius: 10, padding: 14 }, recommendationDescription: { color: theme.text, marginTop: 3 }, rationale: { color: theme.textMuted, fontSize: 13, marginTop: 8 }, impact: { color: theme.accent, marginTop: 10 }, afterImpact: { color: theme.textSubtle, fontSize: 13, marginTop: 3 }, feedbackRow: { alignItems: "center", flexDirection: "row", gap: 4, marginTop: 12 }, feedbackLabel: { color: theme.textSubtle, flex: 1, fontSize: 12 }, feedbackButton: { padding: 6 }, resultCard: { margin: 12, backgroundColor: theme.surface, borderRadius: 10, padding: 16 }, assumption: { color: theme.textSubtle, fontSize: 13, marginTop: 5 }, fitMessage: { color: theme.accent, marginTop: 16, lineHeight: 20 }, macroGrid: { flexDirection: "row", flexWrap: "wrap", marginTop: 16, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.divider, paddingTop: 12 }, macroValue: { width: "50%", marginBottom: 10 }, macroLabel: { color: theme.textSubtle, fontSize: 13 }, afterTitle: { marginTop: 4 }, afterText: { color: theme.textMuted, marginTop: 4 }, logButton: { backgroundColor: theme.accent, borderRadius: 8, alignItems: "center", marginTop: 20, paddingVertical: 13 },
 });

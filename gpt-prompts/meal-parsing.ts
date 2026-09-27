@@ -9,7 +9,8 @@ If enough information is provided, attempt to parse the input into a Meal in the
   "meal": "Early morning snack" | "Breakfast" | "Snack before lunch" | "Uncategorized" | "Lunch" | "Snack before dinner" | "Dinner" | "Midnight Snack", // Use context clues to ascertain which meal category best fits. ONLY USE THESE VALUES.
   "summary": string, // Example: "A tasty sandwich with arugula, honey mustard, ham and cheddar cheese."
   "motivation": string, // Example: "Well done! You did a great job incorporating green vegetables."
-  "ingredients": Ingredient[]
+  "ingredients": Ingredient[],
+  "preferences"?: string[] // Only when the logger asks for learned observations.
 }
 
 Where Ingredient's structure is: 
@@ -56,6 +57,11 @@ Make sure to follow these specific rules:
 7. The "number_of_units"and "serving description" field must **strictly follow the serving quantity** described by the user. For example:
    - "I had 1.52 oz of whipped cream" -> "number_of_units": "1.52"
    - "I had 1/3 lb of beef" -> "number_of_units": "0.33"
+
+8. If the logger context explicitly permits learned preferences, optionally return a
+small "preferences" array containing only durable, high-confidence observations
+grounded in this entry and the supplied memory. Do not invent counts, and do not
+put likes or dislikes in this array. Otherwise omit "preferences".
 
 # Output Format
 Return JSON in the following format:

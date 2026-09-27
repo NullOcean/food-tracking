@@ -9,6 +9,9 @@ export interface userDataState {
   focusedMetrics: DisplayedMacroTypes[];
   dailySummary: DailySummary | null;
   replacements: FoodReplacement[];
+  likes: string[];
+  dislikes: string[];
+  preferences: string[];
 }
 
 export interface FoodReplacement {
@@ -16,6 +19,34 @@ export interface FoodReplacement {
   trigger: string;
   replacement: string;
 }
+
+export type UserMemory = {
+  likes: string[];
+  dislikes: string[];
+  preferences: string[];
+};
+
+const MAX_MEMORY_ITEMS = 100;
+const MAX_MEMORY_VALUE_LENGTH = 240;
+
+const normalizeMemoryValue = (value: string) =>
+  value.trim().replace(/\s+/g, " ").slice(0, MAX_MEMORY_VALUE_LENGTH);
+
+const addUniqueMemoryValue = (values: string[], value: string) => {
+  const normalized = normalizeMemoryValue(value);
+  if (!normalized) return;
+  if (
+    values.length < MAX_MEMORY_ITEMS &&
+    !values.some((existing) => existing.toLowerCase() === normalized.toLowerCase())
+  ) {
+    values.push(normalized);
+  }
+};
+
+const removeMemoryValue = (values: string[], value: string) => {
+  const normalized = value.trim().toLowerCase();
+  return values.filter((existing) => existing.toLowerCase() !== normalized);
+};
 
 // These inputs are intentionally separate from the manually editable goals.
 // A future calculator can use them to suggest goals without overwriting a
@@ -56,6 +87,9 @@ const initialState: userDataState = {
   focusedMetrics: defaultFocusedMetrics,
   dailySummary: null,
   replacements: [],
+  likes: [],
+  dislikes: [],
+  preferences: [],
 };
 
 export const resetDefaultUserGoals = (state?: Partial<userDataState>) => ({
@@ -99,6 +133,28 @@ export const userDataSlice = createSlice({
         (replacement) => replacement.id !== action.payload
       );
     },
+    addLike: (state, action: PayloadAction<string>) => {
+      addUniqueMemoryValue(state.likes, action.payload);
+      state.dislikes = removeMemoryValue(state.dislikes, action.payload);
+    },
+    removeLike: (state, action: PayloadAction<string>) => {
+      state.likes = removeMemoryValue(state.likes, action.payload);
+    },
+    addDislike: (state, action: PayloadAction<string>) => {
+      addUniqueMemoryValue(state.dislikes, action.payload);
+      state.likes = removeMemoryValue(state.likes, action.payload);
+    },
+    removeDislike: (state, action: PayloadAction<string>) => {
+      state.dislikes = removeMemoryValue(state.dislikes, action.payload);
+    },
+    addPreferences: (state, action: PayloadAction<string[]>) => {
+      action.payload.forEach((preference) => {
+        addUniqueMemoryValue(state.preferences, preference);
+      });
+    },
+    removePreference: (state, action: PayloadAction<string>) => {
+      state.preferences = removeMemoryValue(state.preferences, action.payload);
+    },
   },
 });
 
@@ -110,6 +166,12 @@ export const {
   addReplacement,
   updateReplacement,
   removeReplacement,
+  addLike,
+  removeLike,
+  addDislike,
+  removeDislike,
+  addPreferences,
+  removePreference,
 } =
   userDataSlice.actions;
 

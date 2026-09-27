@@ -16,7 +16,7 @@ import {
   WizardResponse,
 } from "@/config/planning-wizard";
 import { PLANNING_WIZARD_PROMPT } from "@/gpt-prompts/planning-wizard";
-import { FoodReplacement } from "@/state/userDataSlice";
+import type { FoodReplacement, UserMemory } from "@/state/userDataSlice";
 
 const CHAT_MODEL = "gpt-4.1-mini";
 
@@ -205,6 +205,7 @@ export const advancePlanningWizard = async (context: {
     "title" | "description" | "planningInput"
   >;
   previousRecommendations: string[];
+  memory: UserMemory;
   guardrails: {
     questionBudget: number;
     questionCount: number;
@@ -307,8 +308,12 @@ export const advancePlanningWizard = async (context: {
   }
 };
 
-export type ParseMealResponse = Promise<Meal | { error: string }>;
-type ParsedMealResponse = Meal & { error?: string };
+export type ParsedMeal = Meal & { learnedPreferences?: string[] };
+export type ParseMealResponse = Promise<ParsedMeal | { error: string }>;
+type ParsedMealResponse = Meal & {
+  error?: string;
+  preferences?: unknown;
+};
 export type UtilizeRecipeResponse = Promise<{
   followUpQuestion?: string;
   transformedInput?: string;
@@ -320,16 +325,48 @@ const replacementInstructions = (replacements: FoodReplacement[]) =>
     ? `\n\nThe user has saved these personal food replacements. Check them before interpreting the user's words. When the input uses a trigger phrase, treat it as the corresponding food description and preserve any extra quantities or context from the input. Do not use a replacement unless the trigger phrase is actually present.\n${JSON.stringify(replacements)}`
     : "";
 
+const memoryInstructions = (
+  memory: UserMemory,
+  allowLearnedPreferences: boolean
+) => `\n\nUSER MEMORY (treat this as helpful context, not an unquestionable fact):
+- likes: ${JSON.stringify(memory.likes)}
+- dislikes: ${JSON.stringify(memory.dislikes)}
+- learned preferences: ${JSON.stringify(memory.preferences)}
+Use likes when they fit the request and avoid dislikes unless the user explicitly asks for them. Do not turn a learned preference into a medical, dietary, or identity claim.${
+  allowLearnedPreferences
+    ? `\nWhen parsing this logger entry, you may add a small number of durable, high-confidence observations to an optional "preferences" string array. Only include observations grounded in the current entry and the supplied memory; do not invent counts or facts. Do not place likes or dislikes in this array.`
+    : ""
+}`;
+
+const sanitizeLearnedPreferences = (value: unknown) =>
+  Array.isArray(value)
+    ? value
+        .filter((preference): preference is string => typeof preference === "string")
+        .map((preference) => preference.trim().replace(/\s+/g, " "))
+        .filter(Boolean)
+        .filter(
+          (preference, index, preferences) =>
+            preferences.findIndex(
+              (candidate) => candidate.toLocaleLowerCase() === preference.toLocaleLowerCase()
+            ) === index
+        )
+        .slice(0, 5)
+    : [];
+
 export const utilizeRecipes = async (
   input: string,
   pastMessages: Message[],
   recipes: Meal[],
-  replacements: FoodReplacement[] = []
+  replacements: FoodReplacement[] = [],
+  memory: UserMemory = { likes: [], dislikes: [], preferences: [] }
 ): UtilizeRecipeResponse => {
   const messages = [
     {
       role: "system",
-      content: RECIPE_UTILIZATION_PROMPT + replacementInstructions(replacements),
+      content:
+        RECIPE_UTILIZATION_PROMPT +
+        replacementInstructions(replacements) +
+        memoryInstructions(memory, false),
     },
     ...pastMessages.map((message) => {
       return {
@@ -389,12 +426,18 @@ export const parseMeal = async (
   input: string,
   pastMessages: Message[],
   recipes: Meal[],
-  replacements: FoodReplacement[] = []
+  replacements: FoodReplacement[] = [],
+  memory: UserMemory = { likes: [], dislikes: [], preferences: [] },
+  options: { allowLearnedPreferences?: boolean } = {}
 ): ParseMealResponse => {
+  const allowLearnedPreferences = options.allowLearnedPreferences ?? false;
   const messages = [
     {
       role: "system",
-      content: MEAL_PARSING_PROMPT + replacementInstructions(replacements),
+      content:
+        MEAL_PARSING_PROMPT +
+        replacementInstructions(replacements) +
+        memoryInstructions(memory, allowLearnedPreferences),
     },
     ...pastMessages.map((message) => {
       return {
@@ -437,16 +480,20 @@ export const parseMeal = async (
     logOpenAIResponse("meal-parsing", startedAt, response);
     const date = new Date();
     try {
-      const meal = JSON.parse(
+      const parsedMeal = JSON.parse(
         response.data.choices[0].message.content
       ) as ParsedMealResponse;
-      if (meal.error) {
+      if (parsedMeal.error) {
         throw new Error("Tried to record an invalid meal");
       }
+      const { preferences, ...meal } = parsedMeal;
       return {
         ...meal,
         mealId: Crypto.randomUUID(),
         date: `${date.getFullYear()}${date.getMonth() + 1}${date.getDate()}`,
+        ...(allowLearnedPreferences
+          ? { learnedPreferences: sanitizeLearnedPreferences(preferences) }
+          : {}),
       };
     } catch (err) {
       return { error: getOpenAIErrorMessage(err) };
@@ -499,12 +546,13 @@ export const parseMealRecipe = async (
     logOpenAIResponse("recipe-parsing", startedAt, response);
     const date = new Date();
     try {
-      const meal = JSON.parse(
+      const parsedMeal = JSON.parse(
         response.data.choices[0].message.content
       ) as ParsedMealResponse;
-      if (meal.error) {
+      if (parsedMeal.error) {
         throw new Error("Tried to record an invalid meal");
       }
+      const { preferences: _preferences, ...meal } = parsedMeal;
       return {
         ...meal,
         mealId: Crypto.randomUUID(),

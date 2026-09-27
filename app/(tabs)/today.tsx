@@ -24,8 +24,10 @@ import { ThemedText } from "@/components/ThemedText";
 import { Meal } from "@/types/openAi.types";
 import {
   defaultFocusedMetrics,
+  addPreferences,
   setDailySummary,
 } from "@/state/userDataSlice";
+import type { UserMemory } from "@/state/userDataSlice";
 import { parseMeal, summarizeDay, transcribeAudio } from "@/services/open-ai";
 import { useVoiceRecorder } from "@/hooks/useVoiceRecorder";
 import { logMeal, recordMeal } from "@/state/foodSlice";
@@ -68,6 +70,11 @@ export default function TodayScreen() {
   const replacements = useSelector(
     (state: RootState) => state.userData.replacements ?? []
   );
+  const memory: UserMemory = useSelector((state: RootState) => ({
+    likes: state.userData.likes ?? [],
+    dislikes: state.userData.dislikes ?? [],
+    preferences: state.userData.preferences ?? [],
+  }));
   const focusedMetrics = useSelector(
     (state: RootState) => state.userData.focusedMetrics ?? defaultFocusedMetrics
   );
@@ -209,7 +216,14 @@ export default function TodayScreen() {
       }
 
       const recipes = allMeals.filter((meal) => meal.isAdded && meal.recipe);
-      const response = await parseMeal(transcript, [], recipes, replacements);
+      const response = await parseMeal(
+        transcript,
+        [],
+        recipes,
+        replacements,
+        memory,
+        { allowLearnedPreferences: true }
+      );
       if ("error" in response) {
         Alert.alert("Couldn't understand that meal", response.error);
         return;
@@ -222,8 +236,12 @@ export default function TodayScreen() {
         return;
       }
 
-      dispatch(recordMeal(response));
-      setQuickPreviewMealId(response.mealId);
+      const { learnedPreferences, ...recordableMeal } = response;
+      if (learnedPreferences?.length) {
+        dispatch(addPreferences(learnedPreferences));
+      }
+      dispatch(recordMeal(recordableMeal));
+      setQuickPreviewMealId(recordableMeal.mealId);
     } finally {
       setIsQuickTranscribing(false);
     }

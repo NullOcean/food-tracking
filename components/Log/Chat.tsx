@@ -20,6 +20,8 @@ import {
   utilizeRecipes,
 } from "@/services/open-ai";
 import { recordMeal } from "@/state/foodSlice";
+import { addPreferences } from "@/state/userDataSlice";
+import type { UserMemory } from "@/state/userDataSlice";
 import { useSelector, useDispatch } from "react-redux";
 import { Message, MessageFrom } from "./Message";
 import { Meal } from "@/types/openAi.types";
@@ -67,6 +69,11 @@ export const Chat = ({
   const replacements = useSelector(
     (state: RootState) => state.userData.replacements ?? []
   );
+  const memory: UserMemory = useSelector((state: RootState) => ({
+    likes: state.userData.likes ?? [],
+    dislikes: state.userData.dislikes ?? [],
+    preferences: state.userData.preferences ?? [],
+  }));
   const [messages, setMessages] = React.useState<Message[]>([]);
   const messagesRef = React.useRef<Message[]>([]);
   const {
@@ -198,7 +205,8 @@ export const Chat = ({
               transcription,
               messagesRef.current ?? [],
               recipes,
-              replacements
+              replacements,
+              memory
             )
           : { transformedInput: transcription };
 
@@ -231,20 +239,26 @@ export const Chat = ({
                 attemptUseRecipe.transformedInput,
                 messagesRef.current ?? [],
                 recipes,
-                replacements
+                replacements,
+                memory,
+                { allowLearnedPreferences: true }
               );
 
         if (!("error" in response)) {
-          if (response.meal) {
-            dispatch(recordMeal(response));
+          const { learnedPreferences, ...recordableMeal } = response;
+          if (recordableMeal.meal) {
+            if (learnedPreferences?.length) {
+              dispatch(addPreferences(learnedPreferences));
+            }
+            dispatch(recordMeal(recordableMeal));
 
-            setMeal(response);
-            onMealRetrieval?.(response.mealId);
+            setMeal(recordableMeal);
+            onMealRetrieval?.(recordableMeal.mealId);
             setMessages((previous) =>
               previous.slice(0, -1).concat({
                 from: MessageFrom.GPT,
-                contents: response.motivation,
-                meal: response,
+                contents: recordableMeal.motivation,
+                meal: recordableMeal,
               })
             );
           } else {

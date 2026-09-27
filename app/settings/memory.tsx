@@ -1,8 +1,13 @@
 import { ThemedText } from "@/components/ThemedText";
 import { useAppTheme } from "@/hooks/useAppTheme";
 import {
+  addDislike,
+  addLike,
   addReplacement,
   FoodReplacement,
+  removeDislike,
+  removeLike,
+  removePreference,
   removeReplacement,
   updateReplacement,
 } from "@/state/userDataSlice";
@@ -26,8 +31,17 @@ export default function MemoryScreen() {
   const replacements = useSelector(
     (state: RootState) => state.userData.replacements ?? []
   );
+  const likes = useSelector((state: RootState) => state.userData.likes ?? []);
+  const dislikes = useSelector(
+    (state: RootState) => state.userData.dislikes ?? []
+  );
+  const preferences = useSelector(
+    (state: RootState) => state.userData.preferences ?? []
+  );
   const [trigger, setTrigger] = useState("");
   const [replacement, setReplacement] = useState("");
+  const [likeInput, setLikeInput] = useState("");
+  const [dislikeInput, setDislikeInput] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const clearForm = () => {
@@ -60,6 +74,14 @@ export default function MemoryScreen() {
     setReplacement(item.replacement);
   };
 
+  const addSignal = (signal: "like" | "dislike") => {
+    const value = (signal === "like" ? likeInput : dislikeInput).trim();
+    if (!value) return;
+    dispatch(signal === "like" ? addLike(value) : addDislike(value));
+    if (signal === "like") setLikeInput("");
+    else setDislikeInput("");
+  };
+
   return (
     <KeyboardAvoidingView
       style={[styles.screen, { backgroundColor: theme.background }]}
@@ -67,9 +89,57 @@ export default function MemoryScreen() {
     >
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <ThemedText style={[styles.intro, { color: theme.textMuted }]}> 
-          Save shorthand for foods you have often. When you mention the phrase while
-          logging, it will be interpreted as the food and amount you specify here.
+          Save shorthand, likes, and dislikes here. The logger and planner use this
+          memory to make future suggestions more personal.
         </ThemedText>
+
+        <View style={[styles.card, { backgroundColor: theme.surface }]}>
+          <ThemedText type="subtitle">Likes</ThemedText>
+          <ThemedText style={[styles.sectionIntro, { color: theme.textMuted }]}>Foods or formats you want to see more often.</ThemedText>
+          <View style={styles.signalRow}>
+            <TextInput
+              value={likeInput}
+              onChangeText={setLikeInput}
+              onSubmitEditing={() => addSignal("like")}
+              placeholder="e.g. bowls"
+              placeholderTextColor={theme.textSubtle}
+              style={[styles.signalInput, { color: theme.text, borderColor: theme.border }]}
+              returnKeyType="done"
+              accessibilityLabel="Add a food you like"
+            />
+            <Pressable style={[styles.addButton, { backgroundColor: theme.accent }]} onPress={() => addSignal("like")}>
+              <ThemedText colorOverride={theme.textOnAccent}>Add</ThemedText>
+            </Pressable>
+          </View>
+          <SignalList values={likes} onRemove={(value) => dispatch(removeLike(value))} emptyText="No likes saved yet." />
+        </View>
+
+        <View style={[styles.card, { backgroundColor: theme.surface }]}>
+          <ThemedText type="subtitle">Dislikes</ThemedText>
+          <ThemedText style={[styles.sectionIntro, { color: theme.textMuted }]}>Foods or formats you want the planner to avoid.</ThemedText>
+          <View style={styles.signalRow}>
+            <TextInput
+              value={dislikeInput}
+              onChangeText={setDislikeInput}
+              onSubmitEditing={() => addSignal("dislike")}
+              placeholder="e.g. salads"
+              placeholderTextColor={theme.textSubtle}
+              style={[styles.signalInput, { color: theme.text, borderColor: theme.border }]}
+              returnKeyType="done"
+              accessibilityLabel="Add a food you dislike"
+            />
+            <Pressable style={[styles.addButton, { backgroundColor: theme.accent }]} onPress={() => addSignal("dislike")}>
+              <ThemedText colorOverride={theme.textOnAccent}>Add</ThemedText>
+            </Pressable>
+          </View>
+          <SignalList values={dislikes} onRemove={(value) => dispatch(removeDislike(value))} emptyText="No dislikes saved yet." />
+        </View>
+
+        <View style={[styles.card, { backgroundColor: theme.surface }]}>
+          <ThemedText type="subtitle">Learned preferences</ThemedText>
+          <ThemedText style={[styles.sectionIntro, { color: theme.textMuted }]}>The logger can add durable observations here over time. You can forget one, but you cannot type one in manually.</ThemedText>
+          <SignalList values={preferences} onRemove={(value) => dispatch(removePreference(value))} emptyText="The logger has not learned anything yet." />
+        </View>
 
         <View style={[styles.card, { backgroundColor: theme.surface }]}> 
           <ThemedText type="defaultSemiBold">When I say...</ThemedText>
@@ -134,6 +204,33 @@ export default function MemoryScreen() {
   );
 }
 
+function SignalList({
+  values,
+  onRemove,
+  emptyText,
+}: {
+  values: string[];
+  onRemove: (value: string) => void;
+  emptyText: string;
+}) {
+  const theme = useAppTheme();
+  if (!values.length) {
+    return <ThemedText style={{ color: theme.textSubtle }}>{emptyText}</ThemedText>;
+  }
+  return (
+    <View style={styles.signalList}>
+      {values.map((value) => (
+        <View key={value} style={[styles.signalChip, { backgroundColor: theme.surfaceRaised }]}>
+          <ThemedText style={styles.signalText}>{value}</ThemedText>
+          <Pressable onPress={() => onRemove(value)} accessibilityLabel={`Remove ${value}`}>
+            <ThemedText colorOverride={theme.textSubtle}>×</ThemedText>
+          </Pressable>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   content: { padding: 20, paddingBottom: 40 },
@@ -141,6 +238,13 @@ const styles = StyleSheet.create({
   card: { borderRadius: 10, padding: 16 },
   input: { borderWidth: 1, borderRadius: 8, fontSize: 16, marginBottom: 16, marginTop: 8, padding: 10 },
   multiline: { minHeight: 72, textAlignVertical: "top" },
+  sectionIntro: { lineHeight: 19, marginTop: 4 },
+  signalRow: { alignItems: "center", flexDirection: "row", gap: 8, marginTop: 12 },
+  signalInput: { borderWidth: 1, borderRadius: 8, flex: 1, fontSize: 16, padding: 10 },
+  addButton: { borderRadius: 8, paddingHorizontal: 14, paddingVertical: 11 },
+  signalList: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
+  signalChip: { alignItems: "center", borderRadius: 16, flexDirection: "row", gap: 6, paddingHorizontal: 10, paddingVertical: 7 },
+  signalText: { flexShrink: 1 },
   formButtons: { flexDirection: "row", justifyContent: "flex-end", alignItems: "center", gap: 12 },
   cancelButton: { padding: 12 },
   saveButton: { borderRadius: 8, paddingHorizontal: 14, paddingVertical: 12 },

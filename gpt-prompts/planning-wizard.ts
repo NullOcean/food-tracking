@@ -36,6 +36,9 @@ Return JSON only. Return exactly one of:
 }
 
 Rules:
+- The user context includes likes, dislikes, and learned preferences. Treat likes
+  as positive signals, avoid dislikes when practical, and use learned preferences
+  as hints rather than facts. Never invent or write memory entries from the planner.
 - Follow the supplied client guardrails exactly. Never invent a question category.
 - Choose the most useful next allowed question. Do not repeat a category already answered.
 - If the user asks for suggestions now, return recommendations immediately.

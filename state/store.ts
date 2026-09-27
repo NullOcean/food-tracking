@@ -45,12 +45,21 @@ const migrations = {
       replacements: state?.userData?.replacements ?? [],
     },
   }),
+  6: (state: any) => ({
+    ...state,
+    userData: {
+      ...state?.userData,
+      likes: state?.userData?.likes ?? [],
+      dislikes: state?.userData?.dislikes ?? [],
+      preferences: state?.userData?.preferences ?? [],
+    },
+  }),
 };
 
 const persistConfig = {
   key: "root",
   storage: AsyncStorage,
-  version: 5,
+  version: 6,
   whitelist: ["userData", "food"],
   migrate: createMigrate(migrations, { debug: false }),
 };
