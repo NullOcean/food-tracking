@@ -4,6 +4,7 @@ import { View, Text, StyleSheet } from "react-native";
 import MealSummary from "../Shared/MealSummary";
 import { useDispatch } from "react-redux";
 import { logMeal } from "@/state/foodSlice";
+import { clearLoggingSession } from "@/state/loggingSessionSlice";
 import { router } from "expo-router";
 import { ThemedText } from "../ThemedText";
 import { useAppTheme } from "@/hooks/useAppTheme";
@@ -32,6 +33,7 @@ export const Message = ({ from, content, meal }: MessageProps) => {
   const addMeal = () => {
     if (!meal) return;
     dispatch(logMeal(meal.mealId));
+    dispatch(clearLoggingSession());
     router.back();
   };
 

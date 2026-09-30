@@ -2,6 +2,7 @@ import React from "react";
 import { View, StyleSheet, Keyboard } from "react-native";
 import { useDispatch } from "react-redux";
 import { logMeal } from "@/state/foodSlice";
+import { clearLoggingSession } from "@/state/loggingSessionSlice";
 import { Chat } from "@/components/Log/Chat";
 import { useLocalSearchParams, useNavigation } from "expo-router";
 
@@ -24,6 +25,7 @@ export default function LoggingScreen() {
       if (mealId.current) {
         dispatch(logMeal(mealId.current));
       }
+      dispatch(clearLoggingSession());
     };
   }, [dispatch]);
 

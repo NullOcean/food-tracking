@@ -31,6 +31,10 @@ jest.mock('../Log/Message', () => ({
 }));
 jest.mock('../../svg/speak.svg', () => 'SpeakIcon');
 jest.mock('@/state/foodSlice', () => ({ recordMeal: jest.fn() }));
+jest.mock('@/state/loggingSessionSlice', () => ({
+  appendLoggingMessages: jest.fn(),
+  clearLoggingSession: jest.fn(),
+}));
 
 let screen: renderer.ReactTestRenderer;
 beforeEach(async () => {

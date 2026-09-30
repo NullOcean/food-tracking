@@ -18,7 +18,7 @@ import {
 import { PLANNING_WIZARD_PROMPT } from "@/gpt-prompts/planning-wizard";
 import type { FoodReplacement, UserMemory } from "@/state/userDataSlice";
 
-const CHAT_MODEL = "gpt-4.1-mini";
+const CHAT_MODEL = "gpt-6-luna";
 
 /**
  * Development diagnostics for every OpenAI request. Deliberately accept only

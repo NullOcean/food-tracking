@@ -21,6 +21,7 @@ import {
 import MealSummary from "@/components/Shared/MealSummary";
 import { ProgressBar } from "@/components/Shared/ProgressBar";
 import { ThemedText } from "@/components/ThemedText";
+import { MessageFrom } from "@/components/Log/Message";
 import { Meal } from "@/types/openAi.types";
 import {
   defaultFocusedMetrics,
@@ -31,6 +32,10 @@ import type { UserMemory } from "@/state/userDataSlice";
 import { parseMeal, summarizeDay, transcribeAudio } from "@/services/open-ai";
 import { useVoiceRecorder } from "@/hooks/useVoiceRecorder";
 import { logMeal, recordMeal } from "@/state/foodSlice";
+import {
+  appendLoggingMessages,
+  clearLoggingSession,
+} from "@/state/loggingSessionSlice";
 import AddSVG from "../../svg/log.svg";
 import SpeakSVG from "../../svg/speak.svg";
 import { useAppTheme } from "@/hooks/useAppTheme";
@@ -55,6 +60,9 @@ export default function TodayScreen() {
     date.getMonth() + 1
   }${date.getDate()}`;
   const allMeals = useSelector((state: RootState) => state.food.meals);
+  const loggingSession = useSelector(
+    (state: RootState) => state.loggingSession ?? { messages: [] }
+  );
   const meals = React.useMemo(
     () =>
       sortMealsByLoggedAt(
@@ -94,17 +102,20 @@ export default function TodayScreen() {
   const latestSummarySignature = React.useRef(summarySignature);
   latestSummarySignature.current = summarySignature;
   const [, setSummaryRefreshTick] = React.useState(0);
+  const [forceRefreshNonce, setForceRefreshNonce] = React.useState(0);
   const [isSummarizing, setIsSummarizing] = React.useState(false);
+  const shouldRequestSummary = shouldRefreshSummary || forceRefreshNonce > 0;
+  const summaryRequestKey = `${summarySignature}:${forceRefreshNonce}`;
 
   React.useEffect(() => {
     if (
-      !shouldRefreshSummary ||
-      requestInFlightFor.current === summarySignature
+      !shouldRequestSummary ||
+      requestInFlightFor.current === summaryRequestKey
     ) {
       return;
     }
 
-    requestInFlightFor.current = summarySignature;
+    requestInFlightFor.current = summaryRequestKey;
     setIsSummarizing(true);
 
     void summarizeDay({
@@ -137,12 +148,20 @@ export default function TodayScreen() {
         );
       })
       .finally(() => {
-        if (requestInFlightFor.current === summarySignature) {
+        if (requestInFlightFor.current === summaryRequestKey) {
           requestInFlightFor.current = undefined;
           setIsSummarizing(false);
         }
       });
-  }, [dispatch, goals, shouldRefreshSummary, summarySignature, todayDate, todayMacros]);
+  }, [
+    dispatch,
+    goals,
+    shouldRequestSummary,
+    summaryRequestKey,
+    summarySignature,
+    todayDate,
+    todayMacros,
+  ]);
 
   React.useEffect(() => {
     if (
@@ -217,12 +236,24 @@ export default function TodayScreen() {
       const recipes = allMeals.filter((meal) => meal.isAdded && meal.recipe);
       const response = await parseMeal(
         transcript,
-        [],
+        loggingSession.messages,
         recipes,
         replacements,
         memory,
         { allowLearnedPreferences: true }
       );
+      const responseMessage =
+        "error" in response
+          ? response.error
+          : response.meal
+            ? response.motivation
+            : response.followUpQuestion;
+      dispatch(appendLoggingMessages([
+        { from: MessageFrom.USER, contents: transcript },
+        ...(responseMessage
+          ? [{ from: MessageFrom.GPT, contents: responseMessage }]
+          : []),
+      ]));
       if ("error" in response) {
         Alert.alert("Couldn't understand that meal", response.error);
         return;
@@ -241,6 +272,7 @@ export default function TodayScreen() {
       }
       dispatch(recordMeal(recordableMeal));
       dispatch(logMeal(recordableMeal.mealId));
+      dispatch(clearLoggingSession());
     } finally {
       setIsQuickTranscribing(false);
     }
@@ -284,9 +316,24 @@ export default function TodayScreen() {
         </View>
       </View>
       <View style={[styles.dailySummary, { backgroundColor: theme.surface }]}>
-        <ThemedText type="defaultSemiBold" style={[styles.dailySummaryTitle, { color: theme.accent }]}>
-          Today’s take
-        </ThemedText>
+        <View style={styles.dailySummaryHeader}>
+          <ThemedText type="defaultSemiBold" style={[styles.dailySummaryTitle, { color: theme.accent }]}>
+            Today’s take
+          </ThemedText>
+          <TouchableOpacity
+            accessibilityLabel="Refresh today’s take"
+            accessibilityRole="button"
+            disabled={isSummarizing}
+            onPress={() => setForceRefreshNonce((nonce) => nonce + 1)}
+            style={styles.refreshSummaryButton}
+          >
+            {isSummarizing ? (
+              <ActivityIndicator color={theme.accent} size="small" />
+            ) : (
+              <Ionicons name="refresh-outline" size={20} color={theme.accent} />
+            )}
+          </TouchableOpacity>
+        </View>
         <ThemedText style={[styles.dailySummaryText, { color: theme.text }]}>
           {isCurrentSummary
             ? dailySummary.content
@@ -380,8 +427,19 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 12,
   },
+  dailySummaryHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
   dailySummaryTitle: {
     marginBottom: 4,
+  },
+  refreshSummaryButton: {
+    minWidth: 28,
+    minHeight: 28,
+    alignItems: "center",
+    justifyContent: "center",
   },
   dailySummaryText: {
     lineHeight: 20,

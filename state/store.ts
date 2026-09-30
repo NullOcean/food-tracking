@@ -6,6 +6,7 @@ import {
   resetDefaultUserGoals,
 } from "./userDataSlice";
 import userDataSlice from "./userDataSlice";
+import loggingSessionSlice from "./loggingSessionSlice";
 import { persistStore, persistReducer } from "redux-persist";
 import { createMigrate } from "redux-persist";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -69,6 +70,7 @@ const persistedReducer = persistReducer(
   combineReducers({
     userData: userDataSlice,
     food: foodSlice,
+    loggingSession: loggingSessionSlice,
   })
 );
 

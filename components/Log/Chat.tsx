@@ -20,6 +20,10 @@ import {
   utilizeRecipes,
 } from "@/services/open-ai";
 import { logMeal, recordMeal } from "@/state/foodSlice";
+import {
+  appendLoggingMessages,
+  clearLoggingSession,
+} from "@/state/loggingSessionSlice";
 import { addPreferences } from "@/state/userDataSlice";
 import type { UserMemory } from "@/state/userDataSlice";
 import { useSelector, useDispatch } from "react-redux";
@@ -75,7 +79,12 @@ export const Chat = ({
     dislikes: state.userData.dislikes ?? [],
     preferences: state.userData.preferences ?? [],
   }));
-  const [messages, setMessages] = React.useState<Message[]>([]);
+  const loggingSessionMessages = useSelector(
+    (state: RootState) => state.loggingSession?.messages ?? []
+  );
+  const [messages, setMessages] = React.useState<Message[]>(
+    onInput || onSubmit ? [] : loggingSessionMessages
+  );
   const messagesRef = React.useRef<Message[]>([]);
   const {
     isRecording,
@@ -223,6 +232,15 @@ export const Chat = ({
       }
 
       if (attemptUseRecipe.followUpQuestion) {
+        dispatch(
+          appendLoggingMessages([
+            { from: MessageFrom.USER, contents: transcription },
+            {
+              from: MessageFrom.GPT,
+              contents: attemptUseRecipe.followUpQuestion as string,
+            },
+          ])
+        );
         setMessages((previous) =>
           previous.slice(0, -1).concat({
             from: MessageFrom.GPT,
@@ -248,6 +266,12 @@ export const Chat = ({
         if (!("error" in response)) {
           const { learnedPreferences, ...recordableMeal } = response;
           if (recordableMeal.meal) {
+            dispatch(
+              appendLoggingMessages([
+                { from: MessageFrom.USER, contents: transcription },
+                { from: MessageFrom.GPT, contents: recordableMeal.motivation },
+              ])
+            );
             if (learnedPreferences?.length) {
               dispatch(addPreferences(learnedPreferences));
             }
@@ -255,6 +279,7 @@ export const Chat = ({
 
             if (voiceOrigin && logMode !== "recipe") {
               dispatch(logMeal(recordableMeal.mealId));
+              dispatch(clearLoggingSession());
               router.back();
               return;
             }
@@ -269,6 +294,15 @@ export const Chat = ({
               })
             );
           } else {
+            dispatch(
+              appendLoggingMessages([
+                { from: MessageFrom.USER, contents: transcription },
+                {
+                  from: MessageFrom.GPT,
+                  contents: response.followUpQuestion as string,
+                },
+              ])
+            );
             setMessages((previous) =>
               previous.slice(0, -1).concat({
                 from: MessageFrom.GPT,
@@ -290,10 +324,16 @@ export const Chat = ({
   };
 
   React.useEffect(() => {
-    if (!initialTranscript || processedInitialTranscript.current) return;
+    if (
+      !initialTranscript ||
+      processedInitialTranscript.current ||
+      loggingSessionMessages.length > 0
+    ) {
+      return;
+    }
     processedInitialTranscript.current = true;
     void attemptParseMeal(initialTranscript, false);
-  }, [initialTranscript]);
+  }, [initialTranscript, loggingSessionMessages.length]);
 
   return (
     <KeyboardAvoidingView
