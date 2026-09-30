@@ -187,12 +187,6 @@ export const Chat = ({
   const approveMeal = (approvedMeal: Meal) => {
     dispatch(logMeal(approvedMeal.mealId));
     dispatch(approvePendingMeal(approvedMeal));
-    const approvalContext: Message = {
-      from: MessageFrom.GPT,
-      contents: `The user approved and logged this meal. Treat it as final and do not revise or duplicate it: ${JSON.stringify(approvedMeal)}.`,
-    };
-    dispatch(appendLoggingMessages([approvalContext]));
-    setMessages((current) => current.concat(approvalContext));
     if (pendingMeals.length === 1) {
       dispatch(clearLoggingSession());
       router.back();
@@ -202,12 +196,6 @@ export const Chat = ({
   const removeMealFromSession = (removedMeal: Meal) => {
     dispatch(removeMeal(removedMeal.mealId));
     dispatch(removePendingMeal(removedMeal.mealId));
-    const contextMessage: Message = {
-      from: MessageFrom.GPT,
-      contents: `The user removed this unapproved meal from the current log: ${JSON.stringify(removedMeal)}. Do not include it in the current pending meals unless the user asks for it again.`,
-    };
-    dispatch(appendLoggingMessages([contextMessage]));
-    setMessages((current) => current.concat(contextMessage));
   };
 
   const attemptParseMeal = async (

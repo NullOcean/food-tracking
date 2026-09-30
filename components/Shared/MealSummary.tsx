@@ -149,6 +149,7 @@ export default function MealSummary({
         {((meal.recipe && !editing) || !meal.recipe) && (
           <ThemedText
             type="subtitle"
+            style={styles.mealTitle}
             onPress={preview ? undefined : () => setExpanded(!expanded)}
           >
             {capFirstLetter(meal.recipe ? meal.recipe.title : meal.meal)}
@@ -319,6 +320,11 @@ const styles = StyleSheet.create({
     width: "100%",
     alignItems: "center",
     gap: 8,
+  },
+  mealTitle: {
+    flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
   },
   ingredientList: {
     gap: 12,

@@ -1,12 +1,12 @@
 import React from "react";
 import { View, StyleSheet, Keyboard, Alert } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
+import { usePreventRemove } from "@react-navigation/native";
 import {
   clearLoggingSession,
   startLoggingSession,
 } from "@/state/loggingSessionSlice";
 import { removeMeal } from "@/state/foodSlice";
-import { store } from "@/state/store";
 import { Chat } from "@/components/Log/Chat";
 import { useLocalSearchParams, useNavigation } from "expo-router";
 import { RootState } from "@/state/store";
@@ -21,6 +21,9 @@ export default function LoggingScreen() {
   const pendingMeals = useSelector(
     (state: RootState) => state.loggingSession?.pendingMeals ?? []
   );
+  const sessionActive = useSelector(
+    (state: RootState) => state.loggingSession?.active ?? false
+  );
   const confirmedLeave = React.useRef(false);
 
   React.useEffect(() => {
@@ -34,11 +37,9 @@ export default function LoggingScreen() {
     dispatch(startLoggingSession());
   }, [dispatch]);
 
-  React.useEffect(() => {
-    const unsubscribe = navigation.addListener("beforeRemove", (event) => {
-      if (!store.getState().loggingSession.active || confirmedLeave.current) return;
-
-      event.preventDefault();
+  usePreventRemove(
+    sessionActive && !confirmedLeave.current,
+    ({ data }) => {
       Alert.alert(
         "Leave without logging?",
         "Your current logging session and unapproved meal will be discarded.",
@@ -51,15 +52,13 @@ export default function LoggingScreen() {
               confirmedLeave.current = true;
               pendingMeals.forEach((meal) => dispatch(removeMeal(meal.mealId)));
               dispatch(clearLoggingSession());
-              navigation.dispatch(event.data.action);
+              navigation.dispatch(data.action);
             },
           },
         ]
       );
-    });
-
-    return unsubscribe;
-  }, [dispatch, navigation, pendingMeals]);
+    }
+  );
 
   React.useEffect(() => {
     return () => {
