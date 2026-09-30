@@ -1,8 +1,6 @@
 import React from "react";
 import {
   ActivityIndicator,
-  Alert,
-  Animated,
   StyleSheet,
   ScrollView,
   View,
@@ -21,23 +19,13 @@ import {
 import MealSummary from "@/components/Shared/MealSummary";
 import { ProgressBar } from "@/components/Shared/ProgressBar";
 import { ThemedText } from "@/components/ThemedText";
-import { MessageFrom } from "@/components/Log/Message";
 import { Meal } from "@/types/openAi.types";
 import {
   defaultFocusedMetrics,
-  addPreferences,
   setDailySummary,
 } from "@/state/userDataSlice";
-import type { UserMemory } from "@/state/userDataSlice";
-import { parseMeal, summarizeDay, transcribeAudio } from "@/services/open-ai";
-import { useVoiceRecorder } from "@/hooks/useVoiceRecorder";
-import { logMeal, recordMeal } from "@/state/foodSlice";
-import {
-  appendLoggingMessages,
-  clearLoggingSession,
-} from "@/state/loggingSessionSlice";
+import { summarizeDay } from "@/services/open-ai";
 import AddSVG from "../../svg/log.svg";
-import SpeakSVG from "../../svg/speak.svg";
 import { useAppTheme } from "@/hooks/useAppTheme";
 import { LinearGradient } from "react-native-gradients";
 import { Ionicons } from "@expo/vector-icons";
@@ -45,24 +33,11 @@ import { Ionicons } from "@expo/vector-icons";
 export default function TodayScreen() {
   const theme = useAppTheme();
   const dispatch = useDispatch();
-  const {
-    isRecording: isQuickRecording,
-    isBusy: isQuickRecordingBusy,
-    metering: quickRecordingMetering,
-    startRecording,
-    stopRecording,
-    discardRecording,
-  } = useVoiceRecorder();
-  const [isQuickTranscribing, setIsQuickTranscribing] = React.useState(false);
-  const keyboardBounce = React.useRef(new Animated.Value(0)).current;
   const date = new Date();
   const todayDate = `${date.getFullYear()}${
     date.getMonth() + 1
   }${date.getDate()}`;
   const allMeals = useSelector((state: RootState) => state.food.meals);
-  const loggingSession = useSelector(
-    (state: RootState) => state.loggingSession ?? { messages: [] }
-  );
   const meals = React.useMemo(
     () =>
       sortMealsByLoggedAt(
@@ -74,14 +49,6 @@ export default function TodayScreen() {
   );
   const todayMacros = React.useMemo(() => getSummedMacros(meals), [meals]);
   const goals = useSelector((state: RootState) => state.userData.goals);
-  const replacements = useSelector(
-    (state: RootState) => state.userData.replacements ?? []
-  );
-  const memory: UserMemory = useSelector((state: RootState) => ({
-    likes: state.userData.likes ?? [],
-    dislikes: state.userData.dislikes ?? [],
-    preferences: state.userData.preferences ?? [],
-  }));
   const focusedMetrics = useSelector(
     (state: RootState) => state.userData.focusedMetrics ?? defaultFocusedMetrics
   );
@@ -184,105 +151,6 @@ export default function TodayScreen() {
     dailySummary?.date === todayDate &&
     dailySummary.inputSignature === summarySignature;
 
-  React.useEffect(() => {
-    if (!isQuickRecording) {
-      keyboardBounce.stopAnimation();
-      keyboardBounce.setValue(0);
-      return;
-    }
-
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(keyboardBounce, {
-          toValue: -8,
-          duration: 450,
-          useNativeDriver: true,
-        }),
-        Animated.timing(keyboardBounce, {
-          toValue: 0,
-          duration: 450,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    animation.start();
-    return () => animation.stop();
-  }, [isQuickRecording, keyboardBounce]);
-
-  const startQuickRecording = async () => {
-    const result = await startRecording();
-    if (result === "permission-denied") {
-      Alert.alert("Microphone access needed", "Allow microphone access in Settings, or use the keyboard instead.");
-    } else if (result === "error") {
-      Alert.alert("Couldn't start recording", "Please try again or use the keyboard.");
-    }
-  };
-
-  const finishQuickRecording = async () => {
-    const uri = await stopRecording();
-    if (!uri) {
-      Alert.alert("Couldn't finish recording", "Please try again or use the keyboard.");
-      return;
-    }
-
-    setIsQuickTranscribing(true);
-    try {
-      const transcript = await transcribeAudio(uri);
-      if (!transcript) {
-        Alert.alert("Couldn't transcribe that", "Please try again or use the keyboard.");
-        return;
-      }
-
-      const recipes = allMeals.filter((meal) => meal.isAdded && meal.recipe);
-      const response = await parseMeal(
-        transcript,
-        loggingSession.messages,
-        recipes,
-        replacements,
-        memory,
-        { allowLearnedPreferences: true }
-      );
-      const responseMessage =
-        "error" in response
-          ? response.error
-          : response.meal
-            ? response.motivation
-            : response.followUpQuestion;
-      dispatch(appendLoggingMessages([
-        { from: MessageFrom.USER, contents: transcript },
-        ...(responseMessage
-          ? [{ from: MessageFrom.GPT, contents: responseMessage }]
-          : []),
-      ]));
-      if ("error" in response) {
-        Alert.alert("Couldn't understand that meal", response.error);
-        return;
-      }
-      if (!response.meal) {
-        router.push({
-          pathname: "/(log)/log",
-          params: { logMode: "meal", initialTranscript: transcript },
-        });
-        return;
-      }
-
-      const { learnedPreferences, ...recordableMeal } = response;
-      if (learnedPreferences?.length) {
-        dispatch(addPreferences(learnedPreferences));
-      }
-      dispatch(recordMeal(recordableMeal));
-      dispatch(logMeal(recordableMeal.mealId));
-      dispatch(clearLoggingSession());
-    } finally {
-      setIsQuickTranscribing(false);
-    }
-  };
-
-  const cancelQuickRecordingToChat = async () => {
-    await discardRecording();
-    router.push({ pathname: "/(log)/log", params: { logMode: "meal" } });
-  };
-
   return (
     <View style={[styles.todayContainer, { backgroundColor: theme.background }]}>
       <View
@@ -350,49 +218,21 @@ export default function TodayScreen() {
         </View>
       </ScrollView>
       <View style={styles.logButton}>
-        {isQuickRecording && (
-          <Animated.View
-            style={[
-              styles.keyboardShortcut,
-              { transform: [{ translateY: keyboardBounce }] },
-            ]}
-          >
-            <TouchableOpacity
-              onPress={cancelQuickRecordingToChat}
-              accessibilityLabel="Cancel recording and open keyboard"
-            >
-              <Ionicons name="keypad-outline" size={30} color={theme.text} />
-            </TouchableOpacity>
-          </Animated.View>
-        )}
         <TouchableOpacity
-          disabled={isQuickRecordingBusy || isQuickTranscribing}
-          onPress={isQuickRecording ? finishQuickRecording : startQuickRecording}
-          style={styles.logButtonPressable}
-          accessibilityLabel={
-            isQuickRecording ? "Stop recording and log food" : "Record food"
+          onPress={() =>
+            router.push({
+              pathname: "/(log)/log",
+              params: { logMode: "meal", startRecording: "1" },
+            })
           }
+          style={styles.logButtonPressable}
+          accessibilityLabel="Record food"
         >
-          {isQuickTranscribing ? (
-            <ActivityIndicator color={theme.accent} size="large" />
-          ) : isQuickRecording ? (
-            <View style={styles.recordingButtonContent}>
-              <SpeakSVG width={80} height={80} color={theme.recording} />
-              <ThemedText style={[styles.meteringBadge, { backgroundColor: theme.overlay, color: theme.text }]}>
-                {formatDecibels(quickRecordingMetering)}
-              </ThemedText>
-            </View>
-          ) : (
-            <AddSVG width={80} height={80} color={theme.accent} />
-          )}
+          <AddSVG width={80} height={80} color={theme.accent} />
         </TouchableOpacity>
       </View>
     </View>
   );
-}
-
-function formatDecibels(metering: number | undefined) {
-  return metering === undefined ? "— dB" : `${Math.round(metering)} dB`;
 }
 
 const styles = StyleSheet.create({
@@ -408,7 +248,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingBottom: "100%",
   },
-  logButtonContainer: {},
   todayList: {
     marginHorizontal: 24,
   },
@@ -454,29 +293,6 @@ const styles = StyleSheet.create({
   logButtonPressable: {
     zIndex: 2,
   },
-  recordingButtonContent: {
-    width: 80,
-    height: 80,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  meteringBadge: {
-    position: "absolute",
-    bottom: 4,
-    borderRadius: 8,
-    overflow: "hidden",
-    fontSize: 11,
-    lineHeight: 16,
-    paddingHorizontal: 5,
-  },
-  keyboardShortcut: {
-    position: "absolute",
-    bottom: 86,
-    width: "100%",
-    alignItems: "center",
-    zIndex: 2,
-  },
-
   logButtonGrad: {
     position: "absolute",
     bottom: 30,

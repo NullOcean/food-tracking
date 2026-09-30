@@ -19,7 +19,7 @@ import {
   transcribeAudio,
   utilizeRecipes,
 } from "@/services/open-ai";
-import { logMeal, recordMeal } from "@/state/foodSlice";
+import { recordMeal } from "@/state/foodSlice";
 import {
   appendLoggingMessages,
   clearLoggingSession,
@@ -33,8 +33,8 @@ import { ButtonStyle, ThemedButton } from "../ThemedButton";
 import SpeakSVG from "../../svg/speak.svg";
 import { useAppTheme } from "@/hooks/useAppTheme";
 import { useLocalSearchParams } from "expo-router";
-import { router } from "expo-router";
 import { RootState } from "@/state/store";
+import { Ionicons } from "@expo/vector-icons";
 
 export type ChatProps = {
   onMealRetrieval?: (mealId: string) => void;
@@ -91,6 +91,7 @@ export const Chat = ({
     isBusy: audioPending,
     startRecording,
     stopRecording,
+    discardRecording,
   } = useVoiceRecorder();
   const [transcription, setTranscription] = React.useState<string>();
   const [meal, setMeal] = React.useState<Meal>();
@@ -156,6 +157,16 @@ export const Chat = ({
     } catch {
       Alert.alert("Couldn't finish recording", "Please try again or type your meal.");
     }
+  };
+
+  const cancelLogging = async () => {
+    await discardRecording();
+    setMessages((previous) =>
+      previous[previous.length - 1]?.contents === "..."
+        ? previous.slice(0, -1)
+        : previous
+    );
+    inputRef.current?.focus();
   };
 
   const attemptParseMeal = async (
@@ -277,13 +288,6 @@ export const Chat = ({
             }
             dispatch(recordMeal(recordableMeal));
 
-            if (voiceOrigin && logMode !== "recipe") {
-              dispatch(logMeal(recordableMeal.mealId));
-              dispatch(clearLoggingSession());
-              router.back();
-              return;
-            }
-
             setMeal(recordableMeal);
             onMealRetrieval?.(recordableMeal.mealId);
             setMessages((previous) =>
@@ -355,6 +359,16 @@ export const Chat = ({
         </View>
       </ScrollView>
       <View style={styles.chatRow}>
+        {isRecording && (
+          <TouchableOpacity
+            disabled={audioPending}
+            accessibilityLabel="Cancel recording and type instead"
+            onPress={cancelLogging}
+            style={styles.cancelRecordingButton}
+          >
+            <Ionicons name="keypad-outline" size={28} color={theme.text} />
+          </TouchableOpacity>
+        )}
         {(showVoiceControl || isRecording) && (
           <View style={styles.speakButton}>
             <TouchableOpacity
@@ -415,6 +429,10 @@ const styles = StyleSheet.create({
     minHeight: 44,
     maxHeight: 100,
     fontSize: 18,
+    justifyContent: "center",
+  },
+  cancelRecordingButton: {
+    alignItems: "center",
     justifyContent: "center",
   },
   speakButton: {},
