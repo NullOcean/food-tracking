@@ -4,6 +4,7 @@ import React from "react";
 import { Provider } from "react-redux";
 import { PersistGate } from "redux-persist/integration/react";
 import { useAppTheme } from "@/hooks/useAppTheme";
+import { discardUnloggedMeals } from "@/state/foodSlice";
 
 export default function RootLayout() {
   const theme = useAppTheme();
@@ -16,7 +17,13 @@ export default function RootLayout() {
   return (
     <>
       <Provider store={store}>
-        <PersistGate loading={null} persistor={persistor}>
+        <PersistGate
+          loading={null}
+          persistor={persistor}
+          onBeforeLift={() => {
+            store.dispatch(discardUnloggedMeals());
+          }}
+        >
           <Stack
             screenOptions={{
               headerStyle: {

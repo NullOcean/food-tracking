@@ -6,7 +6,7 @@ If enough information is provided, attempt to parse the input into a Meal in the
 
 {
   "followUpQuestion"?: string, // Only used if you do not have enough info to populate the other fields.
-  "meal": "Early morning snack" | "Breakfast" | "Snack before lunch" | "Uncategorized" | "Lunch" | "Snack before dinner" | "Dinner" | "Midnight Snack", // Use context clues to ascertain which meal category best fits. ONLY USE THESE VALUES.
+  "meal": string, // Choose a concise, natural meal name based on the food and context, such as "Breakfast" or "Afternoon latte". Do not restrict names to a fixed list.
   "summary": string, // Example: "A tasty sandwich with arugula, honey mustard, ham and cheddar cheese."
   "motivation": string, // Example: "Well done! You did a great job incorporating green vegetables."
   "ingredients": Ingredient[],
@@ -72,3 +72,16 @@ Return JSON in the following format:
 - Be cautious of accuracy when converting servings.
 - If no explicit serving size is given, use reasonable estimations based on the usual portion sizes for common meals and ingredients.
 `;
+
+export const MEAL_SESSION_PARSING_PROMPT = MEAL_PARSING_PROMPT.replace(
+  'If enough information is provided, attempt to parse the input into a Meal in the following JSON format:',
+  'For this logging session, return the complete current set of unapproved meals in the following JSON format:'
+)
+  .replace(
+    /  "meal": .*\n  "summary": string,.*\n  "motivation": string,.*\n  "ingredients": Ingredient\[],\n/,
+    '  "meals": [{ "meal": string, "summary": string, "motivation": string, "ingredients": Ingredient[] }], // Each item is a distinct eating occasion. Give each a concise natural meal name; multiple foods eaten together belong in one meal.\n'
+  )
+  .replace(
+    'Return JSON in the following format:\n- JSON: An object structure without tags, using quotes for all property names.',
+    'Return a JSON object with either "followUpQuestion" and the unchanged current "meals" array, or a complete revised "meals" array. Treat the supplied unapproved meals as the current draft: corrections revise them, additions add items, and removals remove items. Split only clearly distinct eating occasions; multiple foods eaten together are one meal with multiple ingredients. Do not include already-approved meals in the returned array. Approved meals are already logged and must not be revised or duplicated; if the user asks to change an approved meal, explain they can edit it from Today. Return valid JSON only.'
+  );

@@ -4,7 +4,7 @@ export type Meal = {
   loggedAt?: number;
   followUpQuestion?: string;
   date: string;
-  meal: MealCategories;
+  meal: string;
   summary: string;
   motivation: string;
   ingredients: Ingredient[];
@@ -15,17 +15,6 @@ export type RecipeData = {
   yields: number;
   title: string;
 };
-
-export enum MealCategories {
-  UNCATEGORIZED = "Uncategorized",
-  SNACK_EARLY_MORNING = "Early morning snack",
-  BREAKFAST = "Breakfast",
-  SNACK_MID_MORNING = "Snack before lunch",
-  LUNCH = "Lunch",
-  SNACK_AFTERNOON = "Snack before dinner",
-  DINNER = "Dinner",
-  SNACK_MIDNIGHT = "Midnight Snack",
-}
 
 export type Serving = {
   serving_id?: string;

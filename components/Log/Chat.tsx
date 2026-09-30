@@ -14,15 +14,18 @@ import {
   useVoiceRecorder,
 } from "@/hooks/useVoiceRecorder";
 import {
-  parseMeal,
+  parseMealSession,
   parseMealRecipe,
   transcribeAudio,
   utilizeRecipes,
 } from "@/services/open-ai";
-import { recordMeal } from "@/state/foodSlice";
+import { logMeal, recordMeal, removeMeal } from "@/state/foodSlice";
 import {
+  approvePendingMeal,
   appendLoggingMessages,
   clearLoggingSession,
+  removePendingMeal,
+  replacePendingMeals,
 } from "@/state/loggingSessionSlice";
 import { addPreferences } from "@/state/userDataSlice";
 import type { UserMemory } from "@/state/userDataSlice";
@@ -32,7 +35,7 @@ import { Meal } from "@/types/openAi.types";
 import { ButtonStyle, ThemedButton } from "../ThemedButton";
 import SpeakSVG from "../../svg/speak.svg";
 import { useAppTheme } from "@/hooks/useAppTheme";
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { RootState } from "@/state/store";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -68,7 +71,8 @@ export const Chat = ({
     logMode?: string;
     initialTranscript?: string;
   }>();
-  let recipes = useSelector((state: RootState) => state.food.meals).filter(
+  const foodMeals = useSelector((state: RootState) => state.food.meals);
+  const recipes = foodMeals.filter(
     (meal: Meal) => meal?.isAdded && meal?.recipe
   );
   const replacements = useSelector(
@@ -82,6 +86,19 @@ export const Chat = ({
   const loggingSessionMessages = useSelector(
     (state: RootState) => state.loggingSession?.messages ?? []
   );
+  const pendingMealDrafts = useSelector(
+    (state: RootState) => state.loggingSession?.pendingMeals ?? []
+  );
+  const pendingMeals = React.useMemo(
+    () =>
+      pendingMealDrafts.map(
+        (draft) => foodMeals.find((meal) => meal.mealId === draft.mealId) ?? draft
+      ),
+    [foodMeals, pendingMealDrafts]
+  );
+  const approvedMeals = useSelector(
+    (state: RootState) => state.loggingSession?.approvedMeals ?? []
+  );
   const [messages, setMessages] = React.useState<Message[]>(
     onInput || onSubmit ? [] : loggingSessionMessages
   );
@@ -93,8 +110,6 @@ export const Chat = ({
     stopRecording,
     discardRecording,
   } = useVoiceRecorder();
-  const [transcription, setTranscription] = React.useState<string>();
-  const [meal, setMeal] = React.useState<Meal>();
   const dispatch = useDispatch();
 
   const scrollViewRef = React.useRef<ScrollView>(null);
@@ -169,6 +184,32 @@ export const Chat = ({
     inputRef.current?.focus();
   };
 
+  const approveMeal = (approvedMeal: Meal) => {
+    dispatch(logMeal(approvedMeal.mealId));
+    dispatch(approvePendingMeal(approvedMeal));
+    const approvalContext: Message = {
+      from: MessageFrom.GPT,
+      contents: `The user approved and logged this meal. Treat it as final and do not revise or duplicate it: ${JSON.stringify(approvedMeal)}.`,
+    };
+    dispatch(appendLoggingMessages([approvalContext]));
+    setMessages((current) => current.concat(approvalContext));
+    if (pendingMeals.length === 1) {
+      dispatch(clearLoggingSession());
+      router.back();
+    }
+  };
+
+  const removeMealFromSession = (removedMeal: Meal) => {
+    dispatch(removeMeal(removedMeal.mealId));
+    dispatch(removePendingMeal(removedMeal.mealId));
+    const contextMessage: Message = {
+      from: MessageFrom.GPT,
+      contents: `The user removed this unapproved meal from the current log: ${JSON.stringify(removedMeal)}. Do not include it in the current pending meals unless the user asks for it again.`,
+    };
+    dispatch(appendLoggingMessages([contextMessage]));
+    setMessages((current) => current.concat(contextMessage));
+  };
+
   const attemptParseMeal = async (
     transcription: string,
     voiceOrigin = true
@@ -183,7 +224,6 @@ export const Chat = ({
         return;
       }
 
-      setTranscription(transcription);
       if (voiceOrigin) {
         setMessages((previous) => {
           return previous
@@ -243,86 +283,102 @@ export const Chat = ({
       }
 
       if (attemptUseRecipe.followUpQuestion) {
+        const assistantMessage = {
+          from: MessageFrom.GPT,
+          contents: attemptUseRecipe.followUpQuestion,
+        };
         dispatch(
           appendLoggingMessages([
             { from: MessageFrom.USER, contents: transcription },
-            {
-              from: MessageFrom.GPT,
-              contents: attemptUseRecipe.followUpQuestion as string,
-            },
+            assistantMessage,
           ])
         );
         setMessages((previous) =>
-          previous.slice(0, -1).concat({
-            from: MessageFrom.GPT,
-            contents: attemptUseRecipe.followUpQuestion as string,
-          })
+          previous.slice(0, -1).concat(assistantMessage)
         );
       } else if (attemptUseRecipe.transformedInput) {
-        const response =
-          logMode === "recipe"
-            ? await parseMealRecipe(
-                attemptUseRecipe.transformedInput,
-                messagesRef.current ?? []
-              )
-            : await parseMeal(
-                attemptUseRecipe.transformedInput,
-                messagesRef.current ?? [],
-                recipes,
-                replacements,
-                memory,
-                { allowLearnedPreferences: true }
-              );
+        let proposedMeals: Meal[] = [];
+        let followUpQuestion: string | undefined;
+        let learnedPreferences: string[] | undefined;
+        let parsingError: string | undefined;
 
-        if (!("error" in response)) {
-          const { learnedPreferences, ...recordableMeal } = response;
-          if (recordableMeal.meal) {
-            dispatch(
-              appendLoggingMessages([
-                { from: MessageFrom.USER, contents: transcription },
-                { from: MessageFrom.GPT, contents: recordableMeal.motivation },
-              ])
-            );
-            if (learnedPreferences?.length) {
-              dispatch(addPreferences(learnedPreferences));
-            }
-            dispatch(recordMeal(recordableMeal));
-
-            setMeal(recordableMeal);
-            onMealRetrieval?.(recordableMeal.mealId);
-            setMessages((previous) =>
-              previous.slice(0, -1).concat({
-                from: MessageFrom.GPT,
-                contents: recordableMeal.motivation,
-                meal: recordableMeal,
-              })
-            );
-          } else {
-            dispatch(
-              appendLoggingMessages([
-                { from: MessageFrom.USER, contents: transcription },
-                {
-                  from: MessageFrom.GPT,
-                  contents: response.followUpQuestion as string,
-                },
-              ])
-            );
-            setMessages((previous) =>
-              previous.slice(0, -1).concat({
-                from: MessageFrom.GPT,
-                contents: response.followUpQuestion as string,
-              })
-            );
-          }
+        if (logMode === "recipe") {
+          const response = await parseMealRecipe(
+            attemptUseRecipe.transformedInput,
+            messagesRef.current ?? []
+          );
+          if ("error" in response) parsingError = response.error;
+          else if (response.meal) proposedMeals = [response];
+          else followUpQuestion = response.followUpQuestion;
         } else {
-          console.error("Meal parsing failed:", response.error);
+          const response = await parseMealSession(
+            attemptUseRecipe.transformedInput,
+            messagesRef.current ?? [],
+            pendingMeals,
+            approvedMeals,
+            recipes,
+            replacements,
+            memory,
+            { allowLearnedPreferences: true }
+          );
+          if ("error" in response) parsingError = response.error;
+          else {
+            proposedMeals = response.meals;
+            followUpQuestion = response.followUpQuestion;
+            learnedPreferences = response.learnedPreferences;
+          }
+        }
+
+        if (parsingError) {
+          console.error("Meal parsing failed:", parsingError);
           setMessages((previous) =>
             previous.slice(0, -1).concat({
               from: MessageFrom.GPT,
-              contents: `OpenAI request failed: ${response.error}`,
+              contents: `OpenAI request failed: ${parsingError}`,
             })
           );
+          return;
         }
+
+        if (followUpQuestion) {
+          const assistantMessage = {
+            from: MessageFrom.GPT,
+            contents: followUpQuestion,
+          };
+          dispatch(
+            appendLoggingMessages([
+              { from: MessageFrom.USER, contents: transcription },
+              assistantMessage,
+            ])
+          );
+          setMessages((previous) =>
+            previous.slice(0, -1).concat(assistantMessage)
+          );
+          return;
+        }
+
+        pendingMeals.forEach((pending) => dispatch(removeMeal(pending.mealId)));
+        proposedMeals.forEach((proposed) => dispatch(recordMeal(proposed)));
+        dispatch(replacePendingMeals(proposedMeals));
+        if (learnedPreferences?.length) {
+          dispatch(addPreferences(learnedPreferences));
+        }
+        const assistantMessage = {
+          from: MessageFrom.GPT,
+          contents:
+            proposedMeals.length === 1
+              ? proposedMeals[0].motivation
+              : `I’ve prepared ${proposedMeals.length} meals for review. You can edit or approve them one at a time.`,
+        };
+        dispatch(
+          appendLoggingMessages([
+            { from: MessageFrom.USER, contents: transcription },
+            assistantMessage,
+          ])
+        );
+        setMessages((previous) =>
+          previous.slice(0, -1).concat(assistantMessage)
+        );
       }
     }
   };
@@ -353,6 +409,16 @@ export const Chat = ({
               content={message.contents}
               meal={message.meal}
               key={index}
+            />
+          ))}
+          {!onInput && !onSubmit && pendingMeals.map((pendingMeal) => (
+            <Message
+              key={pendingMeal.mealId}
+              from={MessageFrom.GPT}
+              content={pendingMeal.motivation}
+              meal={pendingMeal}
+              onApproveMeal={approveMeal}
+              onRemoveMeal={removeMealFromSession}
             />
           ))}
           {renderBelowMessages?.()}

@@ -1,7 +1,12 @@
 import React from "react";
 import { View, StyleSheet, Keyboard, Alert } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
-import { clearLoggingSession } from "@/state/loggingSessionSlice";
+import {
+  clearLoggingSession,
+  startLoggingSession,
+} from "@/state/loggingSessionSlice";
+import { removeMeal } from "@/state/foodSlice";
+import { store } from "@/state/store";
 import { Chat } from "@/components/Log/Chat";
 import { useLocalSearchParams, useNavigation } from "expo-router";
 import { RootState } from "@/state/store";
@@ -13,11 +18,9 @@ export default function LoggingScreen() {
   }>();
   const navigation = useNavigation();
   const dispatch = useDispatch();
-  const loggingSessionMessages = useSelector(
-    (state: RootState) => state.loggingSession?.messages ?? []
+  const pendingMeals = useSelector(
+    (state: RootState) => state.loggingSession?.pendingMeals ?? []
   );
-  const hasActiveSession =
-    loggingSessionMessages.length > 0 || startRecording === "1";
   const confirmedLeave = React.useRef(false);
 
   React.useEffect(() => {
@@ -28,8 +31,12 @@ export default function LoggingScreen() {
 
 
   React.useEffect(() => {
+    dispatch(startLoggingSession());
+  }, [dispatch]);
+
+  React.useEffect(() => {
     const unsubscribe = navigation.addListener("beforeRemove", (event) => {
-      if (!hasActiveSession || confirmedLeave.current) return;
+      if (!store.getState().loggingSession.active || confirmedLeave.current) return;
 
       event.preventDefault();
       Alert.alert(
@@ -42,6 +49,7 @@ export default function LoggingScreen() {
             style: "destructive",
             onPress: () => {
               confirmedLeave.current = true;
+              pendingMeals.forEach((meal) => dispatch(removeMeal(meal.mealId)));
               dispatch(clearLoggingSession());
               navigation.dispatch(event.data.action);
             },
@@ -51,7 +59,7 @@ export default function LoggingScreen() {
     });
 
     return unsubscribe;
-  }, [dispatch, hasActiveSession, navigation]);
+  }, [dispatch, navigation, pendingMeals]);
 
   React.useEffect(() => {
     return () => {

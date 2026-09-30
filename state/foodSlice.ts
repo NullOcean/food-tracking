@@ -26,7 +26,6 @@ export const foodSlice = createSlice({
       if (mealIndex >= 0) {
         state.meals[mealIndex].isAdded = true;
         state.meals[mealIndex].loggedAt = Date.now();
-        state.meals = state.meals.filter((meal) => meal.isAdded);
       } else {
         console.error(
           "Failed to find meal with id " + action.payload,
@@ -38,6 +37,9 @@ export const foodSlice = createSlice({
       state.meals = state.meals.filter(
         (meal) => meal.mealId !== action.payload
       );
+    },
+    discardUnloggedMeals: (state) => {
+      state.meals = state.meals.filter((meal) => meal.isAdded);
     },
     addIngredient: (state, action: PayloadAction<string>) => {
       const mealIndex = state.meals.findIndex(
@@ -119,6 +121,7 @@ export const {
   recordMeal,
   logMeal,
   removeMeal,
+  discardUnloggedMeals,
   addIngredient,
   removeIngredient,
   updateIngredient,

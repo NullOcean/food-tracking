@@ -23,7 +23,6 @@ import {
   DisplayedMacroTypes,
   Ingredient,
   Meal,
-  MealCategories,
   Serving,
 } from "@/types/openAi.types";
 import { Picker } from "@react-native-picker/picker";
@@ -217,15 +216,13 @@ export default function MealSummary({
       </View>
       {editing && !meal.recipe && !preview && (
         <View style={styles.categoryPickerContainer}>
-          <Picker
-            selectedValue={pickerCategory}
-            onValueChange={(value) => setPickerCategory(value)}
-            style={styles.categoryPicker}
-          >
-            {Object.values(MealCategories).map((key) => (
-              <Picker.Item value={key} label={key}></Picker.Item>
-            ))}
-          </Picker>
+          <TextInput
+            value={pickerCategory ?? ""}
+            onChangeText={setPickerCategory}
+            placeholder="Meal name"
+            placeholderTextColor={theme.textMuted}
+            style={[styles.titleEdit, { color: theme.text }]}
+          />
         </View>
       )}
       <View>

@@ -1,6 +1,6 @@
 import { Meal } from "@/types/openAi.types";
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import MealSummary from "../Shared/MealSummary";
 import { useDispatch } from "react-redux";
 import { logMeal } from "@/state/foodSlice";
@@ -8,10 +8,13 @@ import { clearLoggingSession } from "@/state/loggingSessionSlice";
 import { router } from "expo-router";
 import { ThemedText } from "../ThemedText";
 import { useAppTheme } from "@/hooks/useAppTheme";
+import { Ionicons } from "@expo/vector-icons";
 export type MessageProps = {
   from: MessageFrom;
   content: string;
   meal?: Meal;
+  onApproveMeal?: (meal: Meal) => void;
+  onRemoveMeal?: (meal: Meal) => void;
 };
 
 export enum MessageFrom {
@@ -25,13 +28,23 @@ export type Message = {
   meal?: Meal;
 };
 
-export const Message = ({ from, content, meal }: MessageProps) => {
+export const Message = ({
+  from,
+  content,
+  meal,
+  onApproveMeal,
+  onRemoveMeal,
+}: MessageProps) => {
   const theme = useAppTheme();
   const loading = content === "...";
   const dispatch = useDispatch();
 
   const addMeal = () => {
     if (!meal) return;
+    if (onApproveMeal) {
+      onApproveMeal(meal);
+      return;
+    }
     dispatch(logMeal(meal.mealId));
     dispatch(clearLoggingSession());
     router.back();
@@ -67,6 +80,16 @@ export const Message = ({ from, content, meal }: MessageProps) => {
               onAdd={addMeal}
               allowAdding
             />
+            {onRemoveMeal && (
+              <TouchableOpacity
+                accessibilityLabel={`Remove ${meal.meal} from this log`}
+                onPress={() => onRemoveMeal(meal)}
+                style={styles.removeMealButton}
+              >
+                <Ionicons name="trash-outline" size={18} color={theme.danger} />
+                <ThemedText colorOverride={theme.danger}>Remove from this log</ThemedText>
+              </TouchableOpacity>
+            )}
           </View>
         )}
       </View>
@@ -87,6 +110,13 @@ const styles = StyleSheet.create({
     fontSize: 18,
   },
   mealContainer: {
+    paddingTop: 8,
+  },
+  removeMealButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-end",
+    gap: 6,
     paddingTop: 8,
   },
 });

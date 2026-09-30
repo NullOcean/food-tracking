@@ -1,5 +1,8 @@
 import axios from "axios";
-import { MEAL_PARSING_PROMPT } from "../gpt-prompts/meal-parsing";
+import {
+  MEAL_PARSING_PROMPT,
+  MEAL_SESSION_PARSING_PROMPT,
+} from "../gpt-prompts/meal-parsing";
 const AUTHORIZATION = `Bearer ${process.env.EXPO_PUBLIC_OPENAI_API_KEY}`;
 import * as Crypto from "expo-crypto";
 import { File } from "expo-file-system";
@@ -310,6 +313,10 @@ export const advancePlanningWizard = async (context: {
 
 export type ParsedMeal = Meal & { learnedPreferences?: string[] };
 export type ParseMealResponse = Promise<ParsedMeal | { error: string }>;
+export type ParseMealSessionResponse = Promise<
+  | { meals: Meal[]; followUpQuestion?: string; learnedPreferences?: string[] }
+  | { error: string }
+>;
 type ParsedMealResponse = Meal & {
   error?: string;
   preferences?: unknown;
@@ -501,6 +508,106 @@ export const parseMeal = async (
   } catch (err) {
     logOpenAIFailure("meal-parsing", startedAt, err);
     return { error: getOpenAIErrorMessage(err) };
+  }
+};
+
+export const parseMealSession = async (
+  input: string,
+  pastMessages: Message[],
+  currentMeals: Meal[],
+  approvedMeals: Meal[],
+  recipes: Meal[],
+  replacements: FoodReplacement[] = [],
+  memory: UserMemory = { likes: [], dislikes: [], preferences: [] },
+  options: { allowLearnedPreferences?: boolean } = {}
+): ParseMealSessionResponse => {
+  const allowLearnedPreferences = options.allowLearnedPreferences ?? false;
+  const prompt = `${MEAL_SESSION_PARSING_PROMPT}${replacementInstructions(
+    replacements
+  )}${memoryInstructions(memory, allowLearnedPreferences)}\n\nALREADY APPROVED AND LOGGED MEALS (immutable; never alter, duplicate, remove, or include these in the returned meals array):\n${JSON.stringify(
+    approvedMeals
+  )}\n\nCURRENT UNAPPROVED MEALS (the revised complete set must reflect the user's latest message):\n${JSON.stringify(
+    currentMeals.map(({ mealId: _mealId, date: _date, isAdded: _isAdded, loggedAt: _loggedAt, ...meal }) => meal)
+  )}`;
+  const messages = [
+    { role: "system", content: prompt },
+    ...pastMessages.map((message) => ({
+      role: message.from === MessageFrom.GPT ? "assistant" : "user",
+      content: message.contents,
+    })),
+    ...recipes.map((recipe) => ({
+      role: "user",
+      content: `Here's a recipe I've created in case you can use it to parse this meal: ${JSON.stringify(recipe)}`,
+    })),
+    { role: "user", content: input },
+  ];
+  const startedAt = Date.now();
+  const requestBody = {
+    model: CHAT_MODEL,
+    messages,
+    response_format: { type: "json_object" },
+  };
+  logOpenAIRequest("meal-session-parsing", requestBody);
+
+  try {
+    const response = await axios.post(
+      "https://api.openai.com/v1/chat/completions",
+      requestBody,
+      {
+        headers: {
+          Authorization: AUTHORIZATION,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+    logOpenAIResponse("meal-session-parsing", startedAt, response);
+    try {
+      const parsed = JSON.parse(
+        response.data.choices[0].message.content
+      ) as {
+        meals?: Omit<Meal, "mealId" | "date">[];
+        followUpQuestion?: string;
+        preferences?: unknown;
+        error?: string;
+      };
+      if (parsed.error) return { error: parsed.error };
+      if (parsed.followUpQuestion) {
+        return { meals: currentMeals, followUpQuestion: parsed.followUpQuestion };
+      }
+      if (
+        !Array.isArray(parsed.meals) ||
+        parsed.meals.length < 1 ||
+        parsed.meals.length > 12 ||
+        parsed.meals.some(
+          (meal) =>
+            typeof meal.meal !== "string" ||
+            !meal.meal.trim() ||
+            typeof meal.summary !== "string" ||
+            typeof meal.motivation !== "string" ||
+            !Array.isArray(meal.ingredients) ||
+            meal.ingredients.length === 0
+        )
+      ) {
+        return { error: "The meal logger returned an invalid meal list. Please try again." };
+      }
+      const date = new Date();
+      return {
+        meals: parsed.meals.map((meal) => ({
+          ...meal,
+          meal: meal.meal.trim(),
+          mealId: Crypto.randomUUID(),
+          date: `${date.getFullYear()}${date.getMonth() + 1}${date.getDate()}`,
+        })),
+        ...(allowLearnedPreferences
+          ? { learnedPreferences: sanitizeLearnedPreferences(parsed.preferences) }
+          : {}),
+      };
+    } catch (error) {
+      return { error: getOpenAIErrorMessage(error) };
+    }
+  } catch (error) {
+    logOpenAIFailure("meal-session-parsing", startedAt, error);
+    return { error: getOpenAIErrorMessage(error) };
   }
 };
 
