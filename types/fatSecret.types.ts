@@ -68,6 +68,7 @@ export type FoodDetailedResponse = {
         potassium: string;
         fiber: string;
         sugar: string;
+        added_sugars?: string;
         vitamin_a: string;
         vitamin_c: string;
         calcium: string;

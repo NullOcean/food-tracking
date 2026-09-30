@@ -36,6 +36,7 @@ Where Ingredient's structure is:
         "potassium": string,
         "fiber": string,
         "sugar": string,
+        "added_sugars": string,
         "vitamin_a": string,
         "vitamin_c": string,
         "calcium": string,
@@ -53,6 +54,7 @@ Make sure to follow these specific rules:
 3. If you need more information, return the "followUpQuestion". Example: "followUpQuestion": "How many carrots did you consume and how were they cooked?".
 4. Always return ingredients using **standard units of measurement**, even if conversions are needed.
 5. Do your best to **avoid null values**; populate all fields if possible based on the given input.
+   Estimate added sugars separately from total sugar when details allow; use a conservative estimate and lower confidence when uncertain. Do not assume all sugar is added sugar.
 6. Only return JSON that is ready to use with **JSON.parse()**—no extraneous characters or tags.
 7. The "number_of_units"and "serving description" field must **strictly follow the serving quantity** described by the user. For example:
    - "I had 1.52 oz of whipped cream" -> "number_of_units": "1.52"

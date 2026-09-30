@@ -30,7 +30,8 @@ Return JSON only. Return exactly one of:
       "net_carbohydrates": number,
       "protein": number,
       "fat": number,
-      "sugar": number
+      "sugar": number,
+      "added_sugars": number
     }
   }]
 }

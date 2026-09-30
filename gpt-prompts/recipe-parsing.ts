@@ -36,6 +36,7 @@ Where Ingredient's structure is:
         "potassium": string,
         "fiber": string,
         "sugar": string,
+        "added_sugars": string,
         "vitamin_a": string,
         "vitamin_c": string,
         "calcium": string,

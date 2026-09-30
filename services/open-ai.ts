@@ -62,6 +62,7 @@ const displayedMacroKeys: (keyof DisplayedMacros)[] = [
   "protein",
   "fat",
   "sugar",
+  "added_sugars",
 ];
 
 const hasValidDisplayedMacros = (value: unknown): value is DisplayedMacros =>

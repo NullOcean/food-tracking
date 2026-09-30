@@ -15,6 +15,7 @@ const displayedMacroKeys: DisplayedMacroTypes[] = [
   DisplayedMacroTypes.protein,
   DisplayedMacroTypes.fat,
   DisplayedMacroTypes.sugar,
+  DisplayedMacroTypes.added_sugars,
 ];
 
 export const getSummedMacros = (meals: Meal[]) => {
@@ -26,12 +27,13 @@ export const getSummedMacros = (meals: Meal[]) => {
     protein: 0,
     fat: 0,
     sugar: 0,
+    added_sugars: 0,
   };
 
   for (let key of displayedMacroKeys) {
     for (let meal of meals) {
       for (let ingredient of meal.ingredients) {
-        totals[key] += parseInt(String(ingredient.serving[key] ?? 0));
+        totals[key] += parseFloat(String(ingredient.serving[key] ?? 0));
       }
     }
   }
@@ -50,13 +52,14 @@ export const getRecipeSummedMacros = (meal: Meal) => {
     protein: 0,
     fat: 0,
     sugar: 0,
+    added_sugars: 0,
   };
 
   const yields = meal.recipe?.yields ?? 1;
 
   for (let key of displayedMacroKeys) {
     for (let ingredient of meal.ingredients) {
-      totals[key] += parseInt(String(ingredient.serving[key] ?? 0)) / yields;
+      totals[key] += parseFloat(String(ingredient.serving[key] ?? 0)) / yields;
     }
   }
   for (let key of displayedMacroKeys) {
@@ -122,6 +125,9 @@ export const scaleServing = (serving: Serving, actualAmount: number) => {
     potassium: divideString(serving.potassium, divisor),
     fiber: divideString(serving.fiber, divisor),
     sugar: divideString(serving.sugar, divisor),
+    added_sugars: serving.added_sugars === undefined
+      ? undefined
+      : divideString(serving.added_sugars, divisor),
     vitamin_a: divideString(serving.vitamin_a, divisor),
     vitamin_c: divideString(serving.vitamin_c, divisor),
     calcium: divideString(serving.calcium, divisor),

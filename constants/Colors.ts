@@ -55,6 +55,7 @@ export const Colors = {
     protein: "#69CEDF",
     fiber: "#6986DF",
     sugar: "#FF6ED8",
+    added_sugars: "#C58BFF",
   },
 } as const;
 

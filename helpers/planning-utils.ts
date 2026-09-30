@@ -12,5 +12,6 @@ export function getRemainingMacros(
     protein: goals.protein - consumed.protein,
     fat: goals.fat - consumed.fat,
     sugar: goals.sugar - consumed.sugar,
+    added_sugars: goals.added_sugars - consumed.added_sugars,
   };
 }

@@ -69,6 +69,7 @@ export const foodSlice = createSlice({
           potassium: "0",
           fiber: "0",
           sugar: "0",
+          added_sugars: "0",
           vitamin_a: "0",
           vitamin_c: "0",
           calcium: "0",

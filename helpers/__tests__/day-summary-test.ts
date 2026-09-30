@@ -12,6 +12,7 @@ const goals = {
   protein: 150,
   fat: 65,
   sugar: 50,
+  added_sugars: 50,
 };
 
 describe("day summary cache", () => {

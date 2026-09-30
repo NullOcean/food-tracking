@@ -68,6 +68,7 @@ export const defaultUserGoals: DisplayedMacros = {
   protein: 150,
   fat: 65,
   sugar: 50,
+  added_sugars: 50,
 };
 
 export const defaultFocusedMetrics: DisplayedMacroTypes[] = [

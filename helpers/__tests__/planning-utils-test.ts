@@ -14,6 +14,7 @@ describe("planning utilities", () => {
           protein: 150,
           fat: 65,
           sugar: 50,
+          added_sugars: 50,
         },
         {
           calories: 1050,
@@ -23,6 +24,7 @@ describe("planning utilities", () => {
           protein: 85,
           fat: 35,
           sugar: 20,
+          added_sugars: 8,
         }
       )
     ).toMatchObject({ calories: 850, protein: 65, net_carbohydrates: 75 });

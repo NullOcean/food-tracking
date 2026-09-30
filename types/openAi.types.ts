@@ -35,6 +35,7 @@ export type Serving = {
   potassium: string;
   fiber: string;
   sugar: string;
+  added_sugars?: string;
   vitamin_a: string;
   vitamin_c: string;
   calcium: string;
@@ -51,6 +52,7 @@ export enum DisplayedMacroTypes {
   protein = "protein",
   fat = "fat",
   sugar = "sugar",
+  added_sugars = "added_sugars",
 }
 
 export const DisplayedMacroConfig = [
@@ -110,6 +112,14 @@ export const DisplayedMacroConfig = [
     shortUnit: "g",
     primary: false,
   },
+  {
+    type: DisplayedMacroTypes.added_sugars,
+    color: Colors.metrics.added_sugars,
+    displayName: "Added Sugar",
+    unit: " grams",
+    shortUnit: "g",
+    primary: false,
+  },
 ];
 
 export const DisplayedMacroIterator = DisplayedMacroConfig.map((displayed) => {
@@ -124,6 +134,7 @@ export type DisplayedMacros = {
   protein: number;
   fat: number;
   sugar: number;
+  added_sugars: number;
 };
 
 export type Ingredient = {
